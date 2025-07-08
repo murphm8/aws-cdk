@@ -79,20 +79,104 @@
 
 ## Development Workflow
 
-### Local Development Setup
+### Initial Setup
 ```bash
-# Clone repository
-git clone https://github.com/aws/aws-cdk.git
+# Fork and clone repository
+git clone https://github.com/{your-account}/aws-cdk.git
 cd aws-cdk
 
 # Install dependencies
 yarn install
 
-# Build all packages
-./build.sh
+# Install Git LFS (required for large files)
+git lfs install
+```
 
-# Run tests
-yarn test
+### Building Commands
+
+#### Build Entire Repository
+```bash
+# Full build (may take ~20 minutes with tests)
+npx lerna run build --skip-nx-cache
+
+# Build without using local cache
+npx lerna run build --skip-nx-cache
+```
+
+#### Build Specific Packages
+```bash
+# Build aws-cdk-lib and its dependencies
+npx lerna run build --scope=aws-cdk-lib
+
+# Build framework-integ (required before running integration tests)
+npx lerna run build --scope=@aws-cdk-testing/framework-integ
+```
+
+#### Build Individual Package
+```bash
+# Navigate to package and build
+cd packages/aws-cdk-lib
+yarn build
+
+# Watch mode for development (rebuilds on changes)
+yarn watch
+```
+
+### Testing Commands
+
+#### Unit Tests
+```bash
+# Run unit tests for specific module (e.g. aws-lambda)
+cd packages/aws-cdk-lib
+yarn test aws-lambda
+
+# Run specific unit test file
+npx jest aws-eks/test/name.test.js
+```
+
+#### Integration Tests
+```bash
+# Build framework-integ first (required)
+npx lerna run build --scope=@aws-cdk-testing/framework-integ
+
+# Run integration test for specific module
+cd packages/@aws-cdk-testing/framework-integ
+yarn integ test/aws-lambda/test/integ.lambda.js --update-on-failed
+
+# Run all integ tests for a module (e.g. aws-eks)
+yarn integ --directory test/aws-eks/test
+
+# Run specific integ test without cleanup
+yarn integ test/aws-eks/test/integ.name.js --no-clean --update-on-failed
+```
+
+### Code Quality and Validation
+
+#### Linting
+```bash
+# Run all linters (from package root)
+yarn lint
+
+# Run ESLint specifically
+yarn lint:eslint
+```
+
+#### API Compatibility
+```bash
+# Check API compatibility (run after building)
+cd packages/aws-cdk-lib
+yarn build
+yarn compat
+```
+
+#### Documentation Examples
+```bash
+# Validate README code examples compile
+/bin/bash ./scripts/run-rosetta.sh
+
+# Extract and validate rosetta examples
+cd packages/aws-cdk-lib
+yarn rosetta:extract --strict
 ```
 
 ### Brazil Development (Amazon Internal)
@@ -107,19 +191,35 @@ bb test
 bb package
 ```
 
-### Package Development
+### Development Testing with CDK App
 ```bash
-# Work on specific package
-cd packages/aws-cdk-lib
+# Link local CDK with your app for testing
+cd /path/to/your/cdk/app
+/path/to/aws-cdk/link-all.sh
 
-# Build single package
-yarn build
+# Deploy to test changes
+npx cdk deploy
+```
 
-# Run package tests
-yarn test
+### Useful Development Scripts
+```bash
+# Build only TypeScript (faster, no JSII)
+scripts/build-typescript.sh
 
-# Check API compatibility
-yarn compat
+# Build TypeScript in watch mode
+scripts/build-typescript.sh -w
+
+# Clean stale build artifacts
+scripts/clean-stale-files.sh
+
+# Run command across all packages
+scripts/foreach.sh COMMAND
+
+# Build current package and dependencies
+scripts/buildup
+
+# Build current package and consumers
+scripts/builddown
 ```
 
 ## Testing Strategy
