@@ -179,7 +179,11 @@ export class Arn {
     }
 
     // Handle hierarchical ARN formatting
-    if (components.arnFormat === ArnFormat.HIERARCHICAL_SLASH_SEPARATED && components.resourceHierarchy) {
+    if (components.arnFormat === ArnFormat.HIERARCHICAL_SLASH_SEPARATED) {
+      if (!components.resourceHierarchy || components.resourceHierarchy.length === 0) {
+        throw new UnscopedValidationError('resourceHierarchy is required when arnFormat is HIERARCHICAL_SLASH_SEPARATED');
+      }
+
       const resourcePath = components.resourceHierarchy
         .map(component => `${component.type}/${component.id}`)
         .join('/');

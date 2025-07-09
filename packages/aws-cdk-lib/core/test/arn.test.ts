@@ -531,7 +531,7 @@ describe('arn', () => {
       ]);
     });
 
-    test('format hierarchical ARN without resourceHierarchy falls back to regular formatting', () => {
+    test('format hierarchical ARN without resourceHierarchy raises error', () => {
       // GIVEN
       const components = {
         service: 'pcs',
@@ -544,13 +544,29 @@ describe('arn', () => {
         // No resourceHierarchy provided
       };
 
-      // WHEN
-      const formatted = Arn.format(components);
+      // WHEN & THEN - Should raise an error because resourceHierarchy is required
+      expect(() => {
+        Arn.format(components);
+      }).toThrow(/resourceHierarchy is required when arnFormat is HIERARCHICAL_SLASH_SEPARATED/);
+    });
 
-      // THEN - Should fall back to regular slash-separated formatting
-      expect(formatted).toEqual(
-        'arn:aws:pcs:us-east-1:653539779824:computenodegroup/pcs_szfb6p1t72',
-      );
+    test('format hierarchical ARN with empty resourceHierarchy raises error', () => {
+      // GIVEN
+      const components = {
+        service: 'pcs',
+        region: 'us-east-1',
+        account: '653539779824',
+        partition: 'aws', // Explicitly provide partition
+        resource: 'computenodegroup',
+        resourceName: 'pcs_szfb6p1t72',
+        arnFormat: ArnFormat.HIERARCHICAL_SLASH_SEPARATED,
+        resourceHierarchy: [], // Empty array provided
+      };
+
+      // WHEN & THEN - Should raise an error because resourceHierarchy cannot be empty
+      expect(() => {
+        Arn.format(components);
+      }).toThrow(/resourceHierarchy is required when arnFormat is HIERARCHICAL_SLASH_SEPARATED/);
     });
 
     test('backward compatibility - existing ARN formats unchanged', () => {
