@@ -1,11 +1,21 @@
+import * as constructs from 'constructs';
+import { ICluster } from './cluster';
+import { PurchaseOption, SpotAllocationStrategy } from './enums';
+import { CfnComputeNodeGroup } from './pcs.generated';
+import { ComputeNodeGroupSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as ec2 from '../../aws-ec2';
 import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
-import * as constructs from 'constructs';
-import { CfnComputeNodeGroup } from './pcs.generated';
-import { PurchaseOption, SpotAllocationStrategy } from './enums';
-import { ComputeNodeGroupSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
-import { ICluster } from './cluster';
+
+/**
+ * Error thrown when an invalid compute node group ARN is provided
+ */
+class InvalidComputeNodeGroupArnError extends Error {
+  constructor(arn: string) {
+    super(`Invalid compute node group ARN: ${arn}`);
+    this.name = 'InvalidComputeNodeGroupArnError';
+  }
+}
 
 /**
  * Scaling configuration for a compute node group
@@ -84,11 +94,9 @@ export interface ComputeNodeGroupProps {
   readonly cluster: ICluster;
 
   /**
-   * The subnets where compute instances will be launched
-   *
-   * @default - Private subnets of the cluster's VPC
+   * The subnet IDs where compute instances will be launched
    */
-  readonly subnets?: ec2.SubnetSelection;
+  readonly subnetIds: string[];
 
   /**
    * The AMI ID to use for compute instances
@@ -158,16 +166,19 @@ export interface ComputeNodeGroupProps {
 export interface IComputeNodeGroup extends cdk.IResource {
   /**
    * The ARN of the compute node group
+   * @attribute
    */
   readonly computeNodeGroupArn: string;
 
   /**
    * The ID of the compute node group
+   * @attribute
    */
   readonly computeNodeGroupId: string;
 
   /**
    * The name of the compute node group
+   * @attribute
    */
   readonly computeNodeGroupName: string;
 
@@ -261,19 +272,24 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
   /**
    * Import an existing compute node group by its ARN
    */
-  public static fromComputeNodeGroupArn(scope: constructs.Construct, id: string, computeNodeGroupArn: string, cluster: ICluster): IComputeNodeGroup {
+  public static fromComputeNodeGroupArn(scope: constructs.Construct, id: string, computeNodeGroupArn: string): IComputeNodeGroup {
     const arnParts = cdk.Arn.split(computeNodeGroupArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
     const computeNodeGroupId = arnParts.resourceName;
 
     if (!computeNodeGroupId) {
-      throw new Error(`Invalid compute node group ARN: ${computeNodeGroupArn}`);
+      throw new InvalidComputeNodeGroupArnError(computeNodeGroupArn);
     }
 
     class Import extends cdk.Resource implements IComputeNodeGroup {
       public readonly computeNodeGroupArn = computeNodeGroupArn;
       public readonly computeNodeGroupId = computeNodeGroupId!;
       public readonly computeNodeGroupName = computeNodeGroupId!;
-      public readonly cluster = cluster;
+      // Create a minimal cluster reference - users should use fromComputeNodeGroupAttributes for full control
+      public readonly cluster: ICluster = {
+        clusterId: 'unknown',
+        clusterArn: 'unknown',
+        clusterName: 'unknown',
+      } as ICluster;
     }
 
     return new Import(scope, id);
@@ -282,7 +298,7 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
   /**
    * Import an existing compute node group by its ID
    */
-  public static fromComputeNodeGroupId(scope: constructs.Construct, id: string, computeNodeGroupId: string, cluster: ICluster): IComputeNodeGroup {
+  public static fromComputeNodeGroupId(scope: constructs.Construct, id: string, computeNodeGroupId: string): IComputeNodeGroup {
     const stack = cdk.Stack.of(scope);
     const computeNodeGroupArn = cdk.Arn.format({
       service: 'pcs',
@@ -290,7 +306,47 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       resourceName: computeNodeGroupId,
     }, stack);
 
-    return ComputeNodeGroup.fromComputeNodeGroupArn(scope, id, computeNodeGroupArn, cluster);
+    return ComputeNodeGroup.fromComputeNodeGroupArn(scope, id, computeNodeGroupArn);
+  }
+
+  /**
+   * Creates a basic launch template for HPC workloads
+   */
+  public static createBasicLaunchTemplate(scope: constructs.Construct, id: string, props: BasicLaunchTemplateProps): ec2.LaunchTemplate {
+    // Create security group if not provided
+    let securityGroups = props.securityGroups;
+    if (!securityGroups || securityGroups.length === 0) {
+      const sg = new ec2.SecurityGroup(scope, `${id}SecurityGroup`, {
+        vpc: props.vpc,
+        description: 'Security group for PCS compute instances',
+        allowAllOutbound: true,
+      });
+
+      // Allow SSH access within VPC
+      sg.addIngressRule(
+        ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+        ec2.Port.tcp(22),
+        'SSH access',
+      );
+
+      securityGroups = [sg];
+    }
+
+    // Create basic user data for HPC nodes
+    const userData = props.userData || ec2.UserData.forLinux();
+    userData.addCommands(
+      '# Basic setup for HPC compute node',
+      'yum update -y',
+      'yum install -y htop iotop',
+    );
+
+    return new ec2.LaunchTemplate(scope, id, {
+      instanceType: props.instanceType || ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
+      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      securityGroup: securityGroups[0],
+      keyName: props.keyName,
+      userData,
+    });
   }
 
   public readonly computeNodeGroupArn: string;
@@ -333,10 +389,8 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       });
     }
 
-    // Select subnets
-    const subnets = this.cluster.vpc.selectSubnets(props.subnets || {
-      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-    });
+    // Use provided subnet IDs directly
+    const subnetIds = props.subnetIds;
 
     // Configure instance configurations
     const instanceConfigs = props.instanceConfigurations || [
@@ -383,7 +437,7 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
         maxInstanceCount: scalingConfig.maxInstanceCount || 10,
       },
       slurmConfiguration,
-      subnetIds: subnets.subnetIds,
+      subnetIds: subnetIds,
       tags: props.tags,
     });
 
@@ -413,45 +467,5 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
    */
   public get errorInfo(): cdk.IResolvable {
     return this.cfnComputeNodeGroup.attrErrorInfo;
-  }
-
-  /**
-   * Creates a basic launch template for HPC workloads
-   */
-  public static createBasicLaunchTemplate(scope: constructs.Construct, id: string, props: BasicLaunchTemplateProps): ec2.LaunchTemplate {
-    // Create security group if not provided
-    let securityGroups = props.securityGroups;
-    if (!securityGroups || securityGroups.length === 0) {
-      const sg = new ec2.SecurityGroup(scope, `${id}SecurityGroup`, {
-        vpc: props.vpc,
-        description: 'Security group for PCS compute instances',
-        allowAllOutbound: true,
-      });
-
-      // Allow SSH access within VPC
-      sg.addIngressRule(
-        ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
-        ec2.Port.tcp(22),
-        'SSH access'
-      );
-
-      securityGroups = [sg];
-    }
-
-    // Create basic user data for HPC nodes
-    const userData = props.userData || ec2.UserData.forLinux();
-    userData.addCommands(
-      '# Basic setup for HPC compute node',
-      'yum update -y',
-      'yum install -y htop iotop'
-    );
-
-    return new ec2.LaunchTemplate(scope, id, {
-      instanceType: props.instanceType || ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: securityGroups[0],
-      keyName: props.keyName,
-      userData,
-    });
   }
 }

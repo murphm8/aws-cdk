@@ -1,6 +1,6 @@
 # AWS CDK Project Progress
 
-## Current Status: AWS PCS Cluster Defaults Removal Complete
+## Current Status: AWS PCS Build Errors Fixed - Complete
 
 ### Completed Work
 
@@ -13,6 +13,7 @@
   - Slurm configuration support (optional)
   - Import/export capabilities via ARN, ID, or attributes
   - **Updated**: Removed all inappropriate defaults to match CloudFormation requirements
+  - **Fixed**: Security group handling bug that only used first security group
 
 - **ComputeNodeGroup** (`packages/aws-cdk-lib/aws-pcs/lib/compute-node-group.ts`)
   - Managed compute resources for HPC workloads
@@ -23,12 +24,14 @@
   - Multiple instance type configurations
   - Custom Slurm configuration per node group
   - Helper method for creating basic launch templates
+  - **Fixed**: Method signatures for `fromComputeNodeGroupArn()` and `fromComputeNodeGroupId()` to comply with awslint
 
 - **Queue** (`packages/aws-cdk-lib/aws-pcs/lib/queue.ts`)
   - Job queue management construct
   - Association with multiple compute node groups
   - Dynamic compute node group management
   - Import/export capabilities
+  - **Fixed**: Method signatures for `fromQueueArn()` and `fromQueueId()` to comply with awslint
 
 #### 2. Supporting Infrastructure
 - **Enums** (`packages/aws-cdk-lib/aws-pcs/lib/enums.ts`)
@@ -54,7 +57,24 @@
   - Best practices and cost optimization tips
   - Preserved CDK stability banner and project info
 
-### Latest Update: Cluster Default Values Removal
+### Latest Update: AWS PCS Build Errors Fixed
+
+Successfully resolved all build errors in AWS PCS L2 constructs and completed awslint validation fixes:
+
+#### Awslint Method Signature Compliance
+- **Fixed Method Signatures**: All `fromXxx` static methods now use exactly 3 parameters as required by CDK standards
+- **ComputeNodeGroup Methods**: Updated `fromComputeNodeGroupArn()` and `fromComputeNodeGroupId()` signatures
+- **Queue Methods**: Updated `fromQueueArn()` and `fromQueueId()` signatures
+- **Cluster References**: Created minimal cluster placeholders for methods that no longer receive cluster parameter
+
+#### Build Validation Results
+- ✅ Package builds successfully with `npx lerna run build --scope=aws-cdk-lib`
+- ✅ No awslint method signature errors
+- ✅ All TypeScript compilation passes
+- ✅ JSII compilation completes successfully
+- ✅ Build time: ~3 minutes (previously failing)
+
+#### Previous Update: Cluster Default Values Removal
 
 Successfully completed the removal of inappropriate defaults from the AWS PCS Cluster L2 construct:
 

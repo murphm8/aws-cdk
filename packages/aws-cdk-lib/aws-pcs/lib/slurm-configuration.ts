@@ -1,5 +1,5 @@
-import { CfnCluster, CfnComputeNodeGroup } from './pcs.generated';
 import { AccountingMode } from './enums';
+import { CfnCluster, CfnComputeNodeGroup } from './pcs.generated';
 
 /**
  * Properties for configuring Slurm accounting
@@ -32,9 +32,8 @@ export interface SlurmAuthKeyProps {
   /**
    * The version of the secret to use
    *
-   * @default 'AWSCURRENT'
    */
-  readonly secretVersion?: string;
+  readonly secretVersion: string;
 }
 
 /**
