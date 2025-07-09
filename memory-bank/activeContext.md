@@ -59,56 +59,130 @@ public static fromQueueId(scope: constructs.Construct, id: string, queueId: stri
 2. `packages/aws-cdk-lib/aws-pcs/lib/queue.ts` - Fixed method signatures and cluster reference handling
 
 ### Current Focus
-**NEW TASK: Unit Tests for AWS PCS Cluster L2 Resource - COMPLETED**
+**TASK: Update AWS PCS ComputeNodeGroup L2 Construct - COMPLETED**
 
-Successfully created comprehensive unit tests for the AWS PCS cluster L2 resource following CDK testing patterns.
+Successfully updated the AWS PCS compute-node-group L2 construct to fully match the CloudFormation specification and removed all resource creation utilities.
 
 ### Just Completed
-- **Created Comprehensive Unit Tests**: 22 test cases covering all aspects of the PCS Cluster L2 construct
-- **Test Coverage Areas**:
-  - Basic cluster creation with required properties
-  - Custom cluster names and tags
-  - Multiple subnets and security groups
-  - Slurm configuration (simple and complex)
-  - Cluster import methods (fromClusterArn, fromClusterId, fromClusterAttributes)
-  - Cluster methods (addTags, CloudFormation attributes)
-  - Different cluster sizes (SMALL, MEDIUM, LARGE)
-  - Different scheduler configurations
-  - Basic validation tests
-  - CloudFormation output validation
-- **All Tests Passing**: 22/22 tests pass successfully
-- **Fixed Test Issues**: Resolved TypeScript errors and CloudFormation property mismatches
-- **Proper Test Structure**: Followed established CDK testing patterns using Template assertions
+- **CloudFormation Specification Analysis**: Referenced official AWS CloudFormation documentation for AWS::PCS::ComputeNodeGroup
+- **Complete Parameter Alignment**: Updated L2 construct to match CloudFormation required vs optional parameters exactly
+- **Interface Updates**: Made ALL CloudFormation-required parameters required in the L2 construct
+- **Resource Creation Removal**: Cleaned up L2 construct by removing utility methods and interfaces
+- **Validation Enhancement**: Added comprehensive validation matching CloudFormation constraints
+- **Documentation Updates**: Updated JSDoc comments to match CloudFormation descriptions exactly
+- **Type Safety**: Ensured proper TypeScript compilation and type safety
 
-### Test File Created
-`packages/aws-cdk-lib/aws-pcs/test/cluster.test.ts` - Complete unit test suite with:
-- Proper setup with beforeEach hooks
-- Comprehensive test scenarios
-- CloudFormation template validation
-- Import/export method testing
-- Error handling verification
-- Best practices from aws-lambda tests
+### Key Changes Made
 
-### Memory Bank Updates - Complete
-✅ Updated `progress.md` with comprehensive record of AWS PCS build error fixes:
-- **Method Signature Fixes**: Documented awslint compliance corrections for `fromXxx` methods
-- **Build Validation**: Recorded successful build completion and validation results
-- **Technical Details**: Captured specific changes made to ComputeNodeGroup and Queue classes
-- **Historical Context**: Preserved previous work on cluster defaults removal
+#### 1. Required Parameter Corrections (Complete)
+**Fixed ALL CloudFormation vs L2 construct mismatches:**
+- `instanceConfigurations` - Now properly required (was optional with defaults)
+- `scalingConfiguration` - Now properly required (was optional with defaults)
+- `instanceProfile` - Now properly required (was optional with automatic creation)
+- `instanceType` within `InstanceConfiguration` - Now properly required (was optional with default)
 
-✅ Updated `techContext.md` with comprehensive build and testing instructions from CONTRIBUTING.md:
-- **Build Commands**: Full repository builds, specific package builds, watch mode
-- **Testing Commands**: Unit tests, integration tests, linting, API compatibility
-- **Development Workflow**: Setup, validation, linking with CDK apps
-- **Useful Scripts**: TypeScript-only builds, cleanup, package management
+#### 2. Interface Updates to Match CloudFormation Exactly
 
-### Build & Test Reference
-For future development work, use the commands documented in `memory-bank/techContext.md`:
-- Build aws-cdk-lib: `npx lerna run build --scope=aws-cdk-lib`
-- Run unit tests: `cd packages/aws-cdk-lib && yarn test module-name`
-- Run integration tests: `cd packages/@aws-cdk-testing/framework-integ && yarn integ test/module/test/integ.test.js`
-- Check API compatibility: `yarn build && yarn compat`
-- Validate documentation: `/bin/bash ./scripts/run-rosetta.sh`
+**ScalingConfiguration:**
+```typescript
+// Before: Optional fields with defaults
+export interface ScalingConfiguration {
+  readonly minInstanceCount?: number; // @default 0
+  readonly maxInstanceCount?: number; // @default 10
+}
+
+// After: Required fields matching CloudFormation
+export interface ScalingConfiguration {
+  readonly minInstanceCount: number; // @minimum 0
+  readonly maxInstanceCount: number; // @minimum 0
+}
+```
+
+**InstanceConfiguration:**
+```typescript
+// Before: Optional with default
+export interface InstanceConfiguration {
+  readonly instanceType?: ec2.InstanceType; // @default 'm5.large'
+}
+
+// After: Required matching CloudFormation
+export interface InstanceConfiguration {
+  readonly instanceType: ec2.InstanceType; // Required
+}
+```
+
+**IAM Instance Profile:**
+```typescript
+// Before: Optional with fallback creation
+readonly instanceProfile?: iam.IInstanceProfile; // @default - A new instance profile is created
+
+// After: Required matching CloudFormation
+readonly instanceProfile: iam.IInstanceProfile; // Required
+```
+
+#### 3. Removed Resource Creation Utilities
+**Cleaned up L2 construct focus:**
+- ❌ Removed `BasicLaunchTemplateProps` interface
+- ❌ Removed `createBasicLaunchTemplate()` static method
+- ❌ Removed automatic IAM instance profile creation logic
+- ✅ L2 construct now focuses solely on compute node group management
+
+#### 4. Enhanced Validation
+Added CloudFormation-compliant validation:
+- **AMI ID Pattern**: Validates `^ami-[a-z0-9]+$` format
+- **Scaling Bounds**: Both min/max >= 0, min <= max
+- **Subnet Requirements**: At least one subnet ID required
+- **Instance Configurations**: At least one configuration required
+
+#### 5. Documentation Alignment
+Updated all property descriptions to match CloudFormation documentation:
+- Added CloudFormation context and constraints
+- Improved parameter descriptions with official AWS language
+- Enhanced JSDoc comments with CloudFormation details
+
+#### 6. Constructor Simplification
+- Removed fallback defaults for now-required parameters
+- Removed automatic resource creation logic
+- Removed optional chaining for required fields
+- Uses provided values directly without fallbacks
+- Added comprehensive parameter validation
+
+### Validation Results
+✅ **TypeScript Compilation**: Passed without errors (`npx tsc --noEmit`)
+✅ **Type Safety**: All interfaces properly typed and validated
+✅ **CloudFormation Compliance**: Parameters now match AWS specification exactly
+✅ **L2 Construct Focus**: Removed all resource creation utilities
+✅ **Validation Logic**: Comprehensive error checking with clear messages
+
+### Files Modified
+- `packages/aws-cdk-lib/aws-pcs/lib/compute-node-group.ts` - Complete update to match CloudFormation spec and remove resource creation utilities
+
+### Technical Validation
+The construct now properly enforces CloudFormation requirements and focuses solely on compute node group management:
+```typescript
+// Users must now provide ALL required parameters explicitly
+new ComputeNodeGroup(this, 'MyComputeNodeGroup', {
+  cluster: myCluster,
+  subnetIds: ['subnet-12345'],
+  launchTemplate: { launchTemplate: myTemplate },
+  instanceProfile: myInstanceProfile,                    // Now required
+  instanceConfigurations: [{                             // Now required
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE) // Now required
+  }],
+  scalingConfiguration: {                                 // Now required
+    minInstanceCount: 0,                                  // Now required
+    maxInstanceCount: 10,                                 // Now required
+  },
+});
+```
+
+### Final State
+The AWS PCS ComputeNodeGroup L2 construct is now:
+- ✅ **CloudFormation Compliant**: Fully aligned with AWS specification
+- ✅ **Focused**: No resource creation utilities, pure L2 construct
+- ✅ **Type Safe**: All required parameters properly enforced
+- ✅ **Well Validated**: Comprehensive error checking with clear messages
+- ✅ **Well Documented**: JSDoc comments match CloudFormation documentation
 
 ### Next Steps
-All tasks complete. Memory bank is fully updated with AWS PCS build error resolution documentation.
+All requested changes complete. The construct is now production-ready and fully compliant with AWS CloudFormation specifications.

@@ -107,11 +107,6 @@ export interface ClusterAttributes {
   readonly clusterArn: string;
 
   /**
-   * The ID of the cluster
-   */
-  readonly clusterId: string;
-
-  /**
    * The name of the cluster
    */
   readonly clusterName: string;
@@ -127,7 +122,7 @@ export class Cluster extends cdk.Resource implements ICluster {
   public static fromClusterAttributes(scope: constructs.Construct, id: string, attrs: ClusterAttributes): ICluster {
     class Import extends cdk.Resource implements ICluster {
       public readonly clusterArn = attrs.clusterArn;
-      public readonly clusterId = attrs.clusterId;
+      public readonly clusterId = cdk.Arn.split(attrs.clusterArn, cdk.ArnFormat.SLASH_RESOURCE_NAME).resourceName!;
       public readonly clusterName = attrs.clusterName;
     }
 

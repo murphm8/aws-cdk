@@ -22,18 +22,18 @@ class InvalidComputeNodeGroupArnError extends Error {
  */
 export interface ScalingConfiguration {
   /**
-   * The minimum number of instances in the compute node group
+   * The lower bound of the number of instances allowed in the compute fleet
    *
-   * @default 0
+   * @minimum 0
    */
-  readonly minInstanceCount?: number;
+  readonly minInstanceCount: number;
 
   /**
-   * The maximum number of instances in the compute node group
+   * The upper bound of the number of instances allowed in the compute fleet
    *
-   * @default 10
+   * @minimum 0
    */
-  readonly maxInstanceCount?: number;
+  readonly maxInstanceCount: number;
 }
 
 /**
@@ -41,11 +41,9 @@ export interface ScalingConfiguration {
  */
 export interface InstanceConfiguration {
   /**
-   * The EC2 instance type
-   *
-   * @default 'm5.large'
+   * The EC2 instance type that AWS PCS can provision in the compute node group
    */
-  readonly instanceType?: ec2.InstanceType;
+  readonly instanceType: ec2.InstanceType;
 }
 
 /**
@@ -95,11 +93,15 @@ export interface ComputeNodeGroupProps {
 
   /**
    * The subnet IDs where compute instances will be launched
+   *
+   * The subnets must be in the same VPC as the cluster.
    */
   readonly subnetIds: string[];
 
   /**
    * The AMI ID to use for compute instances
+   *
+   * If not provided, AWS PCS uses the AMI ID specified in the custom launch template.
    *
    * @default - Use the AMI specified in the launch template
    */
@@ -107,25 +109,31 @@ export interface ComputeNodeGroupProps {
 
   /**
    * Launch template configuration
+   *
+   * An Amazon EC2 launch template AWS PCS uses to launch compute nodes.
    */
   readonly launchTemplate: LaunchTemplateConfiguration;
 
   /**
    * The IAM instance profile for compute instances
    *
-   * @default - A new instance profile is created
+   * The Amazon Resource Name (ARN) of the IAM instance profile used to pass an IAM role when launching EC2 instances.
+   * The role contained in your instance profile must have pcs:RegisterComputeNodeGroupInstance
+   * permissions attached to provision instances correctly.
    */
-  readonly instanceProfile?: iam.IInstanceProfile;
+  readonly instanceProfile: iam.IInstanceProfile;
 
   /**
    * Instance configurations for the compute node group
    *
-   * @default - Single m5.large instance configuration
+   * A list of EC2 instance configurations that AWS PCS can provision in the compute node group.
    */
-  readonly instanceConfigurations?: InstanceConfiguration[];
+  readonly instanceConfigurations: InstanceConfiguration[];
 
   /**
    * How EC2 instances are purchased
+   *
+   * Specifies how EC2 instances are purchased on your behalf. AWS PCS supports On-Demand and Spot instances.
    *
    * @default PurchaseOption.ON_DEMAND
    */
@@ -134,19 +142,23 @@ export interface ComputeNodeGroupProps {
   /**
    * Spot instance configuration (only used when purchaseOption is SPOT)
    *
-   * @default - Default spot configuration
+   * Additional configuration when you specify SPOT as the purchaseOption.
+   *
+   * @default - Default spot configuration when using SPOT purchase option
    */
   readonly spotConfiguration?: SpotConfiguration;
 
   /**
    * Scaling configuration for the compute node group
    *
-   * @default - Scale from 0 to 10 instances
+   * Specifies the boundaries of the compute node group auto scaling.
    */
-  readonly scalingConfiguration?: ScalingConfiguration;
+  readonly scalingConfiguration: ScalingConfiguration;
 
   /**
    * Slurm-specific configuration options
+   *
+   * Additional options related to the Slurm scheduler.
    *
    * @default - No Slurm configuration
    */
@@ -154,6 +166,9 @@ export interface ComputeNodeGroupProps {
 
   /**
    * Tags to apply to the compute node group
+   *
+   * 1 or more tags added to the resource. Each tag consists of a tag key and tag value.
+   * The tag value is optional and can be an empty string.
    *
    * @default - No tags
    */
@@ -186,44 +201,6 @@ export interface IComputeNodeGroup extends cdk.IResource {
    * The cluster this compute node group belongs to
    */
   readonly cluster: ICluster;
-}
-
-/**
- * Properties for creating a basic launch template
- */
-export interface BasicLaunchTemplateProps {
-  /**
-   * The VPC where the launch template will be used
-   */
-  readonly vpc: ec2.IVpc;
-
-  /**
-   * The instance type for the launch template
-   *
-   * @default ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE)
-   */
-  readonly instanceType?: ec2.InstanceType;
-
-  /**
-   * Security groups for the instances
-   *
-   * @default - A new security group is created
-   */
-  readonly securityGroups?: ec2.ISecurityGroup[];
-
-  /**
-   * The name of the key pair for SSH access
-   *
-   * @default - No key pair
-   */
-  readonly keyName?: string;
-
-  /**
-   * User data script for the instances
-   *
-   * @default - Basic HPC setup script
-   */
-  readonly userData?: ec2.UserData;
 }
 
 /**
@@ -302,51 +279,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     const stack = cdk.Stack.of(scope);
     const computeNodeGroupArn = cdk.Arn.format({
       service: 'pcs',
-      resource: 'compute-node-group',
+      resource: 'computenodegroup',
       resourceName: computeNodeGroupId,
     }, stack);
 
     return ComputeNodeGroup.fromComputeNodeGroupArn(scope, id, computeNodeGroupArn);
-  }
-
-  /**
-   * Creates a basic launch template for HPC workloads
-   */
-  public static createBasicLaunchTemplate(scope: constructs.Construct, id: string, props: BasicLaunchTemplateProps): ec2.LaunchTemplate {
-    // Create security group if not provided
-    let securityGroups = props.securityGroups;
-    if (!securityGroups || securityGroups.length === 0) {
-      const sg = new ec2.SecurityGroup(scope, `${id}SecurityGroup`, {
-        vpc: props.vpc,
-        description: 'Security group for PCS compute instances',
-        allowAllOutbound: true,
-      });
-
-      // Allow SSH access within VPC
-      sg.addIngressRule(
-        ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
-        ec2.Port.tcp(22),
-        'SSH access',
-      );
-
-      securityGroups = [sg];
-    }
-
-    // Create basic user data for HPC nodes
-    const userData = props.userData || ec2.UserData.forLinux();
-    userData.addCommands(
-      '# Basic setup for HPC compute node',
-      'yum update -y',
-      'yum install -y htop iotop',
-    );
-
-    return new ec2.LaunchTemplate(scope, id, {
-      instanceType: props.instanceType || ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: securityGroups[0],
-      keyName: props.keyName,
-      userData,
-    });
   }
 
   public readonly computeNodeGroupArn: string;
@@ -362,46 +299,49 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
 
     this.cluster = props.cluster;
 
-    // Create instance profile if not provided
-    if (props.instanceProfile) {
-      this.instanceProfile = props.instanceProfile;
-    } else {
-      // Create a role for the compute instances
-      const role = new iam.Role(this, 'InstanceRole', {
-        assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-        description: 'IAM role for PCS compute node group instances',
-      });
+    // Use the provided instance profile (now required)
+    this.instanceProfile = props.instanceProfile;
 
-      // Add necessary permissions for PCS compute nodes
-      role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'));
+    // Validate required parameters
+    if (!props.instanceConfigurations || props.instanceConfigurations.length === 0) {
+      throw new Error('instanceConfigurations is required and must contain at least one configuration');
+    }
 
-      // Add permission to register with PCS
-      role.addToPolicy(new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'pcs:RegisterComputeNodeGroupInstance',
-        ],
-        resources: ['*'],
-      }));
+    if (!props.scalingConfiguration) {
+      throw new Error('scalingConfiguration is required');
+    }
 
-      this.instanceProfile = new iam.InstanceProfile(this, 'InstanceProfile', {
-        role,
-      });
+    // Validate AMI ID format if provided
+    if (props.amiId && !/^ami-[a-z0-9]+$/.test(props.amiId)) {
+      throw new Error(`Invalid AMI ID format: ${props.amiId}. Must match pattern: ^ami-[a-z0-9]+$`);
+    }
+
+    // Validate scaling configuration bounds
+    if (props.scalingConfiguration.minInstanceCount < 0) {
+      throw new Error('minInstanceCount must be >= 0');
+    }
+
+    if (props.scalingConfiguration.maxInstanceCount < 0) {
+      throw new Error('maxInstanceCount must be >= 0');
+    }
+
+    if (props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
+      throw new Error('minInstanceCount cannot be greater than maxInstanceCount');
+    }
+
+    // Validate subnet IDs are provided
+    if (!props.subnetIds || props.subnetIds.length === 0) {
+      throw new Error('At least one subnet ID must be provided');
     }
 
     // Use provided subnet IDs directly
     const subnetIds = props.subnetIds;
 
-    // Configure instance configurations
-    const instanceConfigs = props.instanceConfigurations || [
-      { instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE) },
-    ];
+    // Configure instance configurations (now required)
+    const instanceConfigs = props.instanceConfigurations;
 
-    // Configure scaling
-    const scalingConfig = props.scalingConfiguration || {
-      minInstanceCount: 0,
-      maxInstanceCount: 10,
-    };
+    // Configure scaling (now required)
+    const scalingConfig = props.scalingConfiguration;
 
     // Configure Slurm settings
     let slurmConfiguration;
@@ -428,13 +368,13 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       },
       iamInstanceProfileArn: this.instanceProfile.instanceProfileArn,
       instanceConfigs: instanceConfigs.map(config => ({
-        instanceType: config.instanceType?.toString(),
+        instanceType: config.instanceType.toString(),
       })),
       purchaseOption: props.purchaseOption || PurchaseOption.ON_DEMAND,
       spotOptions,
       scalingConfiguration: {
-        minInstanceCount: scalingConfig.minInstanceCount || 0,
-        maxInstanceCount: scalingConfig.maxInstanceCount || 10,
+        minInstanceCount: scalingConfig.minInstanceCount,
+        maxInstanceCount: scalingConfig.maxInstanceCount,
       },
       slurmConfiguration,
       subnetIds: subnetIds,

@@ -273,7 +273,6 @@ describe('PCS Cluster', () => {
       // GIVEN
       const attributes = {
         clusterArn: 'arn:aws:pcs:us-west-2:123456789012:cluster/test-cluster-id',
-        clusterId: 'test-cluster-id',
         clusterName: 'MyHPCCluster',
       };
 
@@ -282,7 +281,7 @@ describe('PCS Cluster', () => {
 
       // THEN
       expect(importedCluster.clusterArn).toEqual(attributes.clusterArn);
-      expect(importedCluster.clusterId).toEqual(attributes.clusterId);
+      expect(importedCluster.clusterId).toEqual('test-cluster-id'); // Derived from ARN
       expect(importedCluster.clusterName).toEqual(attributes.clusterName);
     });
 
