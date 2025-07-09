@@ -163,6 +163,7 @@ export class Cluster extends cdk.Resource implements ICluster {
       service: 'pcs',
       resource: 'cluster',
       resourceName: clusterId,
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME
     }, stack);
 
     return Cluster.fromClusterArn(scope, id, clusterArn);

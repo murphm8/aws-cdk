@@ -59,7 +59,35 @@ public static fromQueueId(scope: constructs.Construct, id: string, queueId: stri
 2. `packages/aws-cdk-lib/aws-pcs/lib/queue.ts` - Fixed method signatures and cluster reference handling
 
 ### Current Focus
-Task is complete. All AWS PCS build errors have been resolved and the package builds successfully.
+**NEW TASK: Unit Tests for AWS PCS Cluster L2 Resource - COMPLETED**
+
+Successfully created comprehensive unit tests for the AWS PCS cluster L2 resource following CDK testing patterns.
+
+### Just Completed
+- **Created Comprehensive Unit Tests**: 22 test cases covering all aspects of the PCS Cluster L2 construct
+- **Test Coverage Areas**:
+  - Basic cluster creation with required properties
+  - Custom cluster names and tags
+  - Multiple subnets and security groups
+  - Slurm configuration (simple and complex)
+  - Cluster import methods (fromClusterArn, fromClusterId, fromClusterAttributes)
+  - Cluster methods (addTags, CloudFormation attributes)
+  - Different cluster sizes (SMALL, MEDIUM, LARGE)
+  - Different scheduler configurations
+  - Basic validation tests
+  - CloudFormation output validation
+- **All Tests Passing**: 22/22 tests pass successfully
+- **Fixed Test Issues**: Resolved TypeScript errors and CloudFormation property mismatches
+- **Proper Test Structure**: Followed established CDK testing patterns using Template assertions
+
+### Test File Created
+`packages/aws-cdk-lib/aws-pcs/test/cluster.test.ts` - Complete unit test suite with:
+- Proper setup with beforeEach hooks
+- Comprehensive test scenarios
+- CloudFormation template validation
+- Import/export method testing
+- Error handling verification
+- Best practices from aws-lambda tests
 
 ### Memory Bank Updates - Complete
 ✅ Updated `progress.md` with comprehensive record of AWS PCS build error fixes:
