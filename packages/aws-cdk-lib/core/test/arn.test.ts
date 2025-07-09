@@ -400,7 +400,7 @@ describe('arn', () => {
 
       // THEN
       expect(formatted).toEqual(
-        'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id'
+        'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id',
       );
     });
 
@@ -549,7 +549,7 @@ describe('arn', () => {
 
       // THEN - Should fall back to regular slash-separated formatting
       expect(formatted).toEqual(
-        'arn:aws:pcs:us-east-1:653539779824:computenodegroup/pcs_szfb6p1t72'
+        'arn:aws:pcs:us-east-1:653539779824:computenodegroup/pcs_szfb6p1t72',
       );
     });
 

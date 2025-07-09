@@ -18,6 +18,16 @@ class InvalidComputeNodeGroupArnError extends Error {
 }
 
 /**
+ * Error thrown when invalid compute node group configuration is provided
+ */
+class InvalidComputeNodeGroupConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidComputeNodeGroupConfigurationError';
+  }
+}
+
+/**
  * Scaling configuration for a compute node group
  */
 export interface ScalingConfiguration {
@@ -142,7 +152,7 @@ export interface ComputeNodeGroupProps {
   /**
    * Additional configuration when you specify SPOT as the purchaseOption
    *
-   *
+   * @default - No spot options specified
    */
   readonly spotOptions?: SpotOptions;
 
@@ -314,11 +324,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
 
     // Validate required parameters
     if (!props.instanceConfigurations || props.instanceConfigurations.length === 0) {
-      throw new Error('instanceConfigurations is required and must contain at least one configuration');
+      throw new InvalidComputeNodeGroupConfigurationError('instanceConfigurations is required and must contain at least one configuration');
     }
 
     if (!props.scalingConfiguration) {
-      throw new Error('scalingConfiguration is required');
+      throw new InvalidComputeNodeGroupConfigurationError('scalingConfiguration is required');
     }
 
     // Get AMI ID from machine image if provided
@@ -328,21 +338,21 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     }
 
     // Validate scaling configuration bounds
-    if (props.scalingConfiguration.minInstanceCount >= 0) {
-      throw new Error('minInstanceCount must be >= 0');
+    if (props.scalingConfiguration.minInstanceCount < 0) {
+      throw new InvalidComputeNodeGroupConfigurationError('minInstanceCount must be >= 0');
     }
 
-    if (props.scalingConfiguration.maxInstanceCount >= 0) {
-      throw new Error('maxInstanceCount must be >= 0');
+    if (props.scalingConfiguration.maxInstanceCount < 0) {
+      throw new InvalidComputeNodeGroupConfigurationError('maxInstanceCount must be >= 0');
     }
 
-    if (props.scalingConfiguration.minInstanceCount <= props.scalingConfiguration.maxInstanceCount) {
-      throw new Error('minInstanceCount cannot be greater than maxInstanceCount');
+    if (props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
+      throw new InvalidComputeNodeGroupConfigurationError('minInstanceCount cannot be greater than maxInstanceCount');
     }
 
     // Validate subnet IDs are provided
     if (!props.subnetIds || props.subnetIds.length === 0) {
-      throw new Error('At least one subnet ID must be provided');
+      throw new InvalidComputeNodeGroupConfigurationError('At least one subnet ID must be provided');
     }
 
     const subnetIds = props.subnetIds;
@@ -354,7 +364,7 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       slurmConfiguration = SlurmConfiguration.forComputeNodeGroup(props.slurmConfiguration);
     }
 
-    let spotOptions = props.spotOptions
+    let spotOptions = props.spotOptions;
 
     this.cfnComputeNodeGroup = new CfnComputeNodeGroup(this, 'Resource', {
       name: props.computeNodeGroupName,
