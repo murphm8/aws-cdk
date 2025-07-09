@@ -248,10 +248,13 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
    * Import an existing compute node group by its ARN
    */
   public static fromComputeNodeGroupArn(scope: constructs.Construct, id: string, computeNodeGroupArn: string): IComputeNodeGroup {
-    const arnParts = cdk.Arn.split(computeNodeGroupArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
+    const arnParts = cdk.Arn.split(computeNodeGroupArn, cdk.ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
     const computeNodeGroupId = arnParts.resourceName;
 
-    if (!computeNodeGroupId) {
+    // Extract cluster ID from hierarchical ARN structure
+    const clusterId = cdk.Arn.getHierarchicalResource(arnParts, 'cluster');
+
+    if (!computeNodeGroupId || !clusterId) {
       throw new InvalidComputeNodeGroupArnError(computeNodeGroupArn);
     }
 
@@ -259,11 +262,15 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       public readonly computeNodeGroupArn = computeNodeGroupArn;
       public readonly computeNodeGroupId = computeNodeGroupId!;
       public readonly computeNodeGroupName = computeNodeGroupId!;
-      // Create a minimal cluster reference - users should use fromComputeNodeGroupAttributes for full control
+      // Create a minimal cluster reference with extracted cluster ID
       public readonly cluster: ICluster = {
-        clusterId: 'unknown',
-        clusterArn: 'unknown',
-        clusterName: 'unknown',
+        clusterId: clusterId!,
+        clusterArn: cdk.Arn.format({
+          service: 'pcs',
+          resource: 'cluster',
+          resourceName: clusterId,
+        }, cdk.Stack.of(scope)),
+        clusterName: clusterId!,
       } as ICluster;
     }
 
@@ -274,10 +281,15 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
    * Import an existing compute node group by its ID
    */
   public static fromComputeNodeGroupId(scope: constructs.Construct, id: string, computeNodeGroupId: string): IComputeNodeGroup {
+    // Note: fromComputeNodeGroupId requires additional context (cluster ID) to construct hierarchical ARN
+    // Users should prefer fromComputeNodeGroupArn or fromComputeNodeGroupAttributes for better control
     const stack = cdk.Stack.of(scope);
+
+    // Create a minimal hierarchical ARN with unknown cluster ID
+    // This is a fallback - users should use fromComputeNodeGroupArn with full hierarchical ARN
     const computeNodeGroupArn = cdk.Arn.format({
       service: 'pcs',
-      resource: 'computenodegroup',
+      resource: 'cluster/unknown/computenodegroup',
       resourceName: computeNodeGroupId,
     }, stack);
 

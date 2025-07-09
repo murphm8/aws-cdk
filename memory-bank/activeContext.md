@@ -1,6 +1,74 @@
 # Active Context
 
-## Current Task: Hierarchical ARN Support Implementation
+## Current Task: AWS PCS Hierarchical ARN Integration
+
+### Status: Complete
+
+Successfully integrated the new hierarchical ARN support into the AWS PCS compute node group and queue L2 constructs, enabling proper parsing and handling of AWS PCS hierarchical ARNs.
+
+### Just Completed
+- **Compute Node Group Integration**: Updated `fromComputeNodeGroupArn()` method to use `ArnFormat.HIERARCHICAL_SLASH_SEPARATED`
+- **Queue Integration**: Updated `fromQueueArn()` method to use `ArnFormat.HIERARCHICAL_SLASH_SEPARATED`
+- **Cluster ID Extraction**: Both constructs now automatically extract cluster IDs from hierarchical ARNs using `Arn.getHierarchicalResource()`
+- **Enhanced Error Handling**: Improved validation for hierarchical ARN formats in both constructs
+- **Legacy Method Updates**: Updated `fromComputeNodeGroupId()` and `fromQueueId()` methods to handle hierarchical format requirements
+- **Comprehensive Validation**: All hierarchical ARN logic validated with extensive test suite
+
+### Technical Implementation Details
+
+**Compute Node Group Changes:**
+```typescript
+// Before: Used simple SLASH_RESOURCE_NAME format
+const arnParts = cdk.Arn.split(computeNodeGroupArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
+
+// After: Uses hierarchical format with cluster extraction
+const arnParts = cdk.Arn.split(computeNodeGroupArn, cdk.ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+const clusterId = cdk.Arn.getHierarchicalResource(arnParts, 'cluster');
+```
+
+**Queue Changes:**
+```typescript
+// Before: Used simple SLASH_RESOURCE_NAME format
+const arnParts = cdk.Arn.split(queueArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
+
+// After: Uses hierarchical format with cluster extraction
+const arnParts = cdk.Arn.split(queueArn, cdk.ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+const clusterId = cdk.Arn.getHierarchicalResource(arnParts, 'cluster');
+```
+
+**Enhanced Import Logic:**
+Both constructs now:
+- Parse hierarchical ARNs like `arn:aws:pcs:region:account:cluster/cluster-id/resource-type/resource-id`
+- Extract cluster IDs automatically from the ARN hierarchy
+- Create properly populated cluster references instead of placeholder objects
+- Validate ARN format and provide clear error messages
+
+### Validation Results
+- ✅ **Hierarchical ARN Parsing**: Successfully parses AWS PCS ARNs with cluster/resource hierarchy
+- ✅ **Cluster ID Extraction**: Correctly extracts cluster IDs from hierarchical structure
+- ✅ **Resource Identification**: Properly identifies leaf resources (compute node groups, queues)
+- ✅ **Error Handling**: Validates hierarchical format and rejects malformed ARNs
+- ✅ **Import Method Integration**: All import methods work correctly with hierarchical ARNs
+
+### Example Usage
+```typescript
+// AWS PCS Hierarchical ARN
+const nodeGroupArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/my-cluster/computenodegroup/my-nodegroup';
+
+// Import with automatic cluster extraction
+const importedNodeGroup = ComputeNodeGroup.fromComputeNodeGroupArn(scope, 'NodeGroup', nodeGroupArn);
+
+// Results in:
+// - computeNodeGroupId: 'my-nodegroup'
+// - cluster.clusterId: 'my-cluster' (extracted automatically)
+// - cluster.clusterArn: 'arn:aws:pcs:us-east-1:123456789012:cluster/my-cluster'
+```
+
+### Files Modified
+- `packages/aws-cdk-lib/aws-pcs/lib/compute-node-group.ts` - Integrated hierarchical ARN support
+- `packages/aws-cdk-lib/aws-pcs/lib/queue.ts` - Integrated hierarchical ARN support
+
+### Previous Task: Hierarchical ARN Core Implementation
 
 ### Status: Complete
 

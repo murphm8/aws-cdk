@@ -130,10 +130,13 @@ export class Queue extends cdk.Resource implements IQueue {
    * Import an existing queue by its ARN
    */
   public static fromQueueArn(scope: constructs.Construct, id: string, queueArn: string): IQueue {
-    const arnParts = cdk.Arn.split(queueArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
+    const arnParts = cdk.Arn.split(queueArn, cdk.ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
     const queueId = arnParts.resourceName;
 
-    if (!queueId) {
+    // Extract cluster ID from hierarchical ARN structure
+    const clusterId = cdk.Arn.getHierarchicalResource(arnParts, 'cluster');
+
+    if (!queueId || !clusterId) {
       throw new InvalidQueueArnError(queueArn);
     }
 
@@ -141,11 +144,15 @@ export class Queue extends cdk.Resource implements IQueue {
       public readonly queueArn = queueArn;
       public readonly queueId = queueId!;
       public readonly queueName = queueId!;
-      // Create a minimal cluster reference - users should use fromQueueAttributes for full control
+      // Create a minimal cluster reference with extracted cluster ID
       public readonly cluster: ICluster = {
-        clusterId: 'unknown',
-        clusterArn: 'unknown',
-        clusterName: 'unknown',
+        clusterId: clusterId!,
+        clusterArn: cdk.Arn.format({
+          service: 'pcs',
+          resource: 'cluster',
+          resourceName: clusterId,
+        }, cdk.Stack.of(scope)),
+        clusterName: clusterId!,
       } as ICluster;
     }
 
@@ -156,10 +163,15 @@ export class Queue extends cdk.Resource implements IQueue {
    * Import an existing queue by its ID
    */
   public static fromQueueId(scope: constructs.Construct, id: string, queueId: string): IQueue {
+    // Note: fromQueueId requires additional context (cluster ID) to construct hierarchical ARN
+    // Users should prefer fromQueueArn or fromQueueAttributes for better control
     const stack = cdk.Stack.of(scope);
+
+    // Create a minimal hierarchical ARN with unknown cluster ID
+    // This is a fallback - users should use fromQueueArn with full hierarchical ARN
     const queueArn = cdk.Arn.format({
       service: 'pcs',
-      resource: 'queue',
+      resource: 'cluster/unknown/queue',
       resourceName: queueId,
     }, stack);
 
