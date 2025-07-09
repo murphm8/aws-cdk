@@ -478,7 +478,6 @@ function parseTokenArn(arnToken: string, arnFormat: ArnFormat): ArnComponents {
     // For hierarchical ARNs with tokens, we can't parse the full hierarchy structure
     // but we can provide the raw resource path and extract the leaf resource
     const lastComponents = Fn.split('/', Fn.select(5, components));
-    const lastIndex = Fn.ref('AWS::NoValue'); // Can't determine length in CloudFormation
 
     // For tokens, we can't determine the exact leaf resource, so we'll return the raw format
     // Users should use the non-token version for full hierarchical parsing
