@@ -1,6 +1,102 @@
 # AWS CDK Project Progress
 
-## Current Status: AWS PCS ComputeNodeGroup IMachineImage Update - Complete
+## Current Status: Hierarchical ARN Support Implementation - Complete
+
+### Latest Update: Hierarchical ARN Support for AWS CDK Core
+
+Successfully implemented comprehensive hierarchical ARN support in the AWS CDK core library to handle AWS PCS and other services with hierarchical resource structures.
+
+#### Core ARN Implementation (`packages/aws-cdk-lib/core/lib/arn.ts`)
+
+**New ARN Format Support:**
+- **`ArnFormat.HIERARCHICAL_SLASH_SEPARATED`**: New enum value for hierarchical ARNs
+- **Leaf-first Design**: Primary `resource`/`resourceName` fields contain the final resource (what the ARN represents)
+- **Full Hierarchy Access**: Complete hierarchy available via new `resourceHierarchy` array
+
+**Enhanced Interfaces:**
+```typescript
+// New ResourceComponent interface
+export interface ResourceComponent {
+  readonly type: string;  // e.g., 'cluster', 'computenodegroup'
+  readonly id: string;    // e.g., 'test-cluster-id'
+}
+
+// Extended ArnComponents with hierarchy support
+export interface ArnComponents {
+  // ... existing fields unchanged
+  readonly resourceHierarchy?: ResourceComponent[];  // New optional field
+}
+```
+
+**Enhanced Parsing & Formatting:**
+- **`split()` method**: Now detects and parses hierarchical ARNs automatically
+- **`format()` method**: Supports reconstructing hierarchical ARNs from components
+- **Error handling**: Validates hierarchical ARNs must have even number of components (type/id pairs)
+- **Token support**: Full CloudFormation expression compatibility
+
+**Ergonomic Helper Methods:**
+```typescript
+// Extract specific resource IDs by type
+Arn.getHierarchicalResource(components, 'cluster') // Returns cluster ID
+Arn.getHierarchicalResource(components, 'computenodegroup') // Returns node group ID
+
+// Get all resource types in hierarchy
+Arn.getHierarchicalResourceTypes(components) // Returns ['cluster', 'computenodegroup']
+```
+
+#### Comprehensive Unit Tests (`packages/aws-cdk-lib/core/test/arn.test.ts`)
+
+**14 Comprehensive Test Cases Added:**
+- ✅ AWS PCS hierarchical ARN parsing with fake security-safe data
+- ✅ Complex multi-level hierarchical ARNs (3+ levels)
+- ✅ ARN formatting from components with round-trip compatibility
+- ✅ Ergonomic helper method functionality and edge cases
+- ✅ CloudFormation token support for hierarchical ARNs
+- ✅ Error handling for invalid ARN structures
+- ✅ Backward compatibility validation (existing ARN formats unchanged)
+- ✅ Single resource pair support and fallback formatting
+
+**Security Best Practices:**
+- All tests use fake account IDs (`123456789012`) and resource names (`test-cluster-id`, `test-nodegroup-id`)
+- No real AWS account data in codebase
+- Comprehensive test coverage without security exposure
+
+#### Technical Implementation Benefits
+
+**Backward Compatibility:**
+- All existing ARN parsing continues to work unchanged
+- No breaking changes to existing APIs
+- Existing CDK applications unaffected
+
+**Developer Experience:**
+```typescript
+// Parse AWS PCS hierarchical ARN
+const pcsArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id';
+const components = Arn.split(pcsArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+// Intuitive access to leaf resource (what the ARN represents)
+console.log(components.resource);     // 'computenodegroup'
+console.log(components.resourceName); // 'test-nodegroup-id'
+
+// Ergonomic access to parent resources
+const clusterId = Arn.getHierarchicalResource(components, 'cluster'); // 'test-cluster-id'
+```
+
+**Extensibility:**
+- Works for any hierarchical ARN format, not just AWS PCS
+- Future AWS services with hierarchical ARNs automatically supported
+- Maintains full TypeScript type safety
+
+#### Files Modified
+- `packages/aws-cdk-lib/core/lib/arn.ts` - Core hierarchical ARN implementation
+- `packages/aws-cdk-lib/core/test/arn.test.ts` - Comprehensive unit tests
+
+#### Validation Results
+- ✅ All 14 hierarchical ARN tests pass (14/14 passed, 0 failed)
+- ✅ Full backward compatibility maintained
+- ✅ TypeScript compilation successful
+- ✅ JSII compilation compatible
+- ✅ CloudFormation token support verified
 
 ### Completed Work
 

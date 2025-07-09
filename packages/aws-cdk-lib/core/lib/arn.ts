@@ -50,6 +50,30 @@ export enum ArnFormat {
    */
   // eslint-disable-next-line @cdklabs/no-literal-partition
   SLASH_RESOURCE_SLASH_RESOURCE_NAME = 'arn:aws:service:region:account:/resource/resourceName',
+
+  /**
+   * This represents a hierarchical format with multiple slash-separated resource components.
+   * Like in: 'arn:aws:pcs:region:account:cluster/clusterId/computenodegroup/nodeGroupId'.
+   * The 'resource' and 'resourceName' fields will contain the final (leaf) resource type and ID,
+   * while the full hierarchy is available via the 'resourceHierarchy' field.
+   */
+  // eslint-disable-next-line @cdklabs/no-literal-partition
+  HIERARCHICAL_SLASH_SEPARATED = 'arn:aws:service:region:account:resourceType1/resourceId1/resourceType2/resourceId2',
+}
+
+/**
+ * Represents a single resource component in a hierarchical ARN
+ */
+export interface ResourceComponent {
+  /**
+   * The resource type (e.g., 'cluster', 'computenodegroup')
+   */
+  readonly type: string;
+
+  /**
+   * The resource identifier
+   */
+  readonly id: string;
 }
 
 export interface ArnComponents {
@@ -115,6 +139,15 @@ export interface ArnComponents {
    *   `ArnFormat.SLASH_RESOURCE_NAME` if that property was also not provided
    */
   readonly arnFormat?: ArnFormat;
+
+  /**
+   * For hierarchical ARNs, contains the structured resource hierarchy.
+   * For example, a PCS ARN like 'arn:aws:pcs:us-east-1:123:cluster/id1/computenodegroup/id2'
+   * would result in: [{ type: 'cluster', id: 'id1' }, { type: 'computenodegroup', id: 'id2' }]
+   *
+   * @default undefined - only populated for hierarchical ARN formats
+   */
+  readonly resourceHierarchy?: ResourceComponent[];
 }
 
 export class Arn {
@@ -143,6 +176,15 @@ export class Arn {
     // Catch both 'null' and 'undefined'
     if (partition == null || region == null || account == null) {
       throw new UnscopedValidationError(`Arn.format: partition (${partition}), region (${region}), and account (${account}) must all be passed if stack is not passed.`);
+    }
+
+    // Handle hierarchical ARN formatting
+    if (components.arnFormat === ArnFormat.HIERARCHICAL_SLASH_SEPARATED && components.resourceHierarchy) {
+      const resourcePath = components.resourceHierarchy
+        .map(component => `${component.type}/${component.id}`)
+        .join('/');
+
+      return `arn:${partition}:${components.service}:${region}:${account}:${resourcePath}`;
     }
 
     const sep = components.sep ?? (components.arnFormat === ArnFormat.COLON_RESOURCE_NAME ? ':' : '/');
@@ -238,51 +280,85 @@ export class Arn {
     let sep: string | undefined;
     let resourcePartStartIndex = 0;
     let detectedArnFormat: ArnFormat;
+    let resourceHierarchy: ResourceComponent[] | undefined;
 
-    let slashIndex = resourceTypeOrName.indexOf('/');
-    if (slashIndex === 0) {
-      // new-style ARNs are of the form 'arn:aws:s4:us-west-1:12345:/resource-type/resource-name'
-      slashIndex = resourceTypeOrName.indexOf('/', 1);
-      resourcePartStartIndex = 1;
-      detectedArnFormat = ArnFormat.SLASH_RESOURCE_SLASH_RESOURCE_NAME;
-    }
-    if (slashIndex !== -1) {
-      // the slash is only a separator if ArnFormat is not NO_RESOURCE_NAME
-      if (arnFormat === ArnFormat.NO_RESOURCE_NAME) {
-        sep = undefined;
-        slashIndex = -1;
-        detectedArnFormat = ArnFormat.NO_RESOURCE_NAME;
-      } else {
+    // Handle hierarchical ARNs first
+    if (arnFormat === ArnFormat.HIERARCHICAL_SLASH_SEPARATED) {
+      const resourcePath = resourceTypeOrName.split('/');
+
+      // Hierarchical ARNs must have an even number of components (type/id pairs)
+      if (resourcePath.length % 2 !== 0) {
+        throw new UnscopedValidationError(`Invalid hierarchical ARN format: ${arn}`);
+      }
+
+      resourceHierarchy = [];
+
+      // Build hierarchy pairs (type, id, type, id, ...)
+      for (let i = 0; i < resourcePath.length; i += 2) {
+        if (i + 1 < resourcePath.length) {
+          resourceHierarchy.push({
+            type: resourcePath[i],
+            id: resourcePath[i + 1],
+          });
+        }
+      }
+
+      // The leaf (final) resource becomes the primary resource/resourceName
+      const leafResource = resourceHierarchy[resourceHierarchy.length - 1];
+      if (leafResource) {
+        resource = leafResource.type;
+        resourceName = leafResource.id;
         sep = '/';
-        detectedArnFormat = resourcePartStartIndex === 0
-          ? ArnFormat.SLASH_RESOURCE_NAME
-          // need to repeat this here, as otherwise the compiler thinks 'detectedArnFormat' is not initialized in all paths
-          : ArnFormat.SLASH_RESOURCE_SLASH_RESOURCE_NAME;
-      }
-    } else if (rest.length > 0) {
-      sep = ':';
-      slashIndex = -1;
-      detectedArnFormat = ArnFormat.COLON_RESOURCE_NAME;
-    } else {
-      sep = undefined;
-      detectedArnFormat = ArnFormat.NO_RESOURCE_NAME;
-    }
-
-    if (slashIndex !== -1) {
-      resource = resourceTypeOrName.substring(resourcePartStartIndex, slashIndex);
-      resourceName = resourceTypeOrName.substring(slashIndex + 1);
-    } else {
-      resource = resourceTypeOrName;
-    }
-
-    if (rest.length > 0) {
-      if (!resourceName) {
-        resourceName = '';
+        detectedArnFormat = ArnFormat.HIERARCHICAL_SLASH_SEPARATED;
       } else {
-        resourceName += ':';
+        throw new UnscopedValidationError(`Invalid hierarchical ARN format: ${arn}`);
+      }
+    } else {
+      let slashIndex = resourceTypeOrName.indexOf('/');
+      if (slashIndex === 0) {
+        // new-style ARNs are of the form 'arn:aws:s4:us-west-1:12345:/resource-type/resource-name'
+        slashIndex = resourceTypeOrName.indexOf('/', 1);
+        resourcePartStartIndex = 1;
+        detectedArnFormat = ArnFormat.SLASH_RESOURCE_SLASH_RESOURCE_NAME;
+      }
+      if (slashIndex !== -1) {
+        // the slash is only a separator if ArnFormat is not NO_RESOURCE_NAME
+        if (arnFormat === ArnFormat.NO_RESOURCE_NAME) {
+          sep = undefined;
+          slashIndex = -1;
+          detectedArnFormat = ArnFormat.NO_RESOURCE_NAME;
+        } else {
+          sep = '/';
+          detectedArnFormat = resourcePartStartIndex === 0
+            ? ArnFormat.SLASH_RESOURCE_NAME
+            // need to repeat this here, as otherwise the compiler thinks 'detectedArnFormat' is not initialized in all paths
+            : ArnFormat.SLASH_RESOURCE_SLASH_RESOURCE_NAME;
+        }
+      } else if (rest.length > 0) {
+        sep = ':';
+        slashIndex = -1;
+        detectedArnFormat = ArnFormat.COLON_RESOURCE_NAME;
+      } else {
+        sep = undefined;
+        detectedArnFormat = ArnFormat.NO_RESOURCE_NAME;
       }
 
-      resourceName += rest.join(':');
+      if (slashIndex !== -1) {
+        resource = resourceTypeOrName.substring(resourcePartStartIndex, slashIndex);
+        resourceName = resourceTypeOrName.substring(slashIndex + 1);
+      } else {
+        resource = resourceTypeOrName;
+      }
+
+      if (rest.length > 0) {
+        if (!resourceName) {
+          resourceName = '';
+        } else {
+          resourceName += ':';
+        }
+
+        resourceName += rest.join(':');
+      }
     }
 
     // "|| undefined" will cause empty strings to be treated as "undefined".
@@ -297,6 +373,7 @@ export class Arn {
       resourceName,
       sep,
       arnFormat: detectedArnFormat,
+      resourceHierarchy,
     });
   }
 
@@ -333,6 +410,22 @@ export class Arn {
     return parsed.resourceName;
   }
 
+  /**
+   * Extract a specific resource ID from hierarchical ARN components by resource type
+   * Returns undefined for non-hierarchical ARNs or if resource type not found
+   */
+  public static getHierarchicalResource(components: ArnComponents, resourceType: string): string | undefined {
+    return components.resourceHierarchy?.find(r => r.type === resourceType)?.id;
+  }
+
+  /**
+   * Get all resource types in a hierarchical ARN
+   * Returns empty array for non-hierarchical ARNs
+   */
+  public static getHierarchicalResourceTypes(components: ArnComponents): string[] {
+    return components.resourceHierarchy?.map(r => r.type) || [];
+  }
+
   private constructor() { }
 }
 
@@ -359,6 +452,7 @@ function parseTokenArn(arnToken: string, arnFormat: ArnFormat): ArnComponents {
   // arn:partition:service:region:account:resource:resourceName
   // arn:partition:service:region:account:resource/resourceName
   // arn:partition:service:region:account:/resource/resourceName
+  // arn:partition:service:region:account:resourceType1/resourceId1/resourceType2/resourceId2
 
   const components = Fn.split(':', arnToken);
 
@@ -380,6 +474,17 @@ function parseTokenArn(arnToken: string, arnFormat: ArnFormat): ArnComponents {
       resourceName = undefined;
       sep = undefined;
     }
+  } else if (arnFormat === ArnFormat.HIERARCHICAL_SLASH_SEPARATED) {
+    // For hierarchical ARNs with tokens, we can't parse the full hierarchy structure
+    // but we can provide the raw resource path and extract the leaf resource
+    const lastComponents = Fn.split('/', Fn.select(5, components));
+    const lastIndex = Fn.ref('AWS::NoValue'); // Can't determine length in CloudFormation
+
+    // For tokens, we can't determine the exact leaf resource, so we'll return the raw format
+    // Users should use the non-token version for full hierarchical parsing
+    resource = Fn.select(0, lastComponents); // First resource type
+    resourceName = Fn.select(1, lastComponents); // First resource ID (approximation)
+    sep = '/';
   } else {
     // we know that the 'resource' and 'resourceName' parts are separated by slash here,
     // so we split the 6th segment from the colon-separated ones with a slash

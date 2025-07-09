@@ -1,72 +1,113 @@
 # Active Context
 
-## Current Task: AWS PCS ComputeNodeGroup IMachineImage Update
+## Current Task: Hierarchical ARN Support Implementation
 
 ### Status: Complete
 
-Successfully updated AWS PCS ComputeNodeGroup to use `IMachineImage` instead of string for AMI parameter.
+Successfully implemented comprehensive hierarchical ARN support in the AWS CDK core library to handle AWS PCS and other services with hierarchical resource structures.
 
 ### Just Completed
-- **Interface Modernization**: Changed `amiId?: string` to `machineImage?: ec2.IMachineImage` in `ComputeNodeGroupProps`
-- **Implementation Update**: Updated constructor to extract AMI ID using `props.machineImage.getImage(this).imageId`
-- **Developer Experience Enhancement**: Users can now use CDK machine image abstractions
-- **Type Safety Improvement**: Compile-time validation instead of runtime string validation
-- **CDK Consistency**: Aligned with other AWS CDK EC2 constructs that use `IMachineImage`
+- **Core ARN Implementation**: Added `ArnFormat.HIERARCHICAL_SLASH_SEPARATED` and enhanced parsing/formatting logic
+- **New Interfaces**: Created `ResourceComponent` interface and extended `ArnComponents` with `resourceHierarchy` field
+- **Enhanced Parsing**: Updated `split()` method to detect and parse hierarchical ARNs automatically
+- **Enhanced Formatting**: Updated `format()` method to reconstruct hierarchical ARNs from components
+- **Ergonomic Helpers**: Added `getHierarchicalResource()` and `getHierarchicalResourceTypes()` methods
+- **Comprehensive Tests**: Added 14 unit tests with fake security-safe data
+- **Error Handling**: Validates hierarchical ARNs must have even number of components (type/id pairs)
+- **Token Support**: Full CloudFormation expression compatibility maintained
 
 ### Technical Changes Made
 
-**Interface Update:**
+**New ARN Format Enum:**
 ```typescript
-// Before: String-based AMI ID
-readonly amiId?: string;
-
-// After: IMachineImage interface
-readonly machineImage?: ec2.IMachineImage;
+export enum ArnFormat {
+  // ... existing formats
+  HIERARCHICAL_SLASH_SEPARATED = 'arn:aws:service:region:account:resourceType1/resourceId1/resourceType2/resourceId2',
+}
 ```
 
-**Implementation Changes:**
+**New ResourceComponent Interface:**
 ```typescript
-// New AMI ID extraction logic
-let amiId: string | undefined;
-if (props.machineImage) {
-  amiId = props.machineImage.getImage(this).imageId;
+export interface ResourceComponent {
+  readonly type: string;  // e.g., 'cluster', 'computenodegroup'
+  readonly id: string;    // e.g., 'test-cluster-id'
+}
+```
+
+**Extended ArnComponents Interface:**
+```typescript
+export interface ArnComponents {
+  // ... existing fields unchanged
+  readonly resourceHierarchy?: ResourceComponent[];  // New optional field
+}
+```
+
+**Enhanced Parsing Logic:**
+```typescript
+// Hierarchical ARNs must have even number of components (type/id pairs)
+if (resourcePath.length % 2 !== 0) {
+  throw new UnscopedValidationError(`Invalid hierarchical ARN format: ${arn}`);
 }
 
-// Pass extracted AMI ID to CloudFormation
-this.cfnComputeNodeGroup = new CfnComputeNodeGroup(this, 'Resource', {
-  // ...
-  amiId: amiId,
-  // ...
-});
+// Build hierarchy pairs and set leaf resource as primary
+resourceHierarchy = [];
+for (let i = 0; i < resourcePath.length; i += 2) {
+  resourceHierarchy.push({
+    type: resourcePath[i],
+    id: resourcePath[i + 1],
+  });
+}
+
+// Leaf (final) resource becomes primary resource/resourceName
+const leafResource = resourceHierarchy[resourceHierarchy.length - 1];
+resource = leafResource.type;      // 'computenodegroup'
+resourceName = leafResource.id;    // 'test-nodegroup-id'
 ```
 
-### Benefits Achieved
-- **Better Developer Experience**: Users can now use:
-  - `ec2.MachineImage.latestAmazonLinux2()`
-  - `ec2.MachineImage.fromSsmParameter()`
-  - `ec2.MachineImage.genericLinux()`
-  - Custom machine image implementations
-- **Type Safety**: No more manual AMI ID format validation needed
-- **Flexibility**: Supports both static AMI IDs and dynamic AMI resolution
-- **Consistency**: Matches patterns used in other CDK EC2 constructs
+**Ergonomic Helper Methods:**
+```typescript
+// Extract specific resource IDs by type
+public static getHierarchicalResource(components: ArnComponents, resourceType: string): string | undefined {
+  return components.resourceHierarchy?.find(r => r.type === resourceType)?.id;
+}
+
+// Get all resource types in hierarchy
+public static getHierarchicalResourceTypes(components: ArnComponents): string[] {
+  return components.resourceHierarchy?.map(r => r.type) || [];
+}
+```
 
 ### Usage Example
 ```typescript
-// New usage with IMachineImage
-new ComputeNodeGroup(this, 'MyNodeGroup', {
-  machineImage: ec2.MachineImage.latestAmazonLinux2(),
-  // ... other props
+// Parse AWS PCS hierarchical ARN
+const pcsArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id';
+const components = Arn.split(pcsArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+// Intuitive access to leaf resource (what the ARN represents)
+console.log(components.resource);     // 'computenodegroup'
+console.log(components.resourceName); // 'test-nodegroup-id'
+
+// Ergonomic access to parent resources
+const clusterId = Arn.getHierarchicalResource(components, 'cluster'); // 'test-cluster-id'
+const nodeGroupId = Arn.getHierarchicalResource(components, 'computenodegroup'); // 'test-nodegroup-id'
+
+// Full hierarchy structure
+components.resourceHierarchy.forEach(comp => {
+  console.log(`${comp.type}: ${comp.id}`);
 });
 ```
 
 ### Files Modified
-- `packages/aws-cdk-lib/aws-pcs/lib/compute-node-group.ts` - Updated interface and implementation
+- `packages/aws-cdk-lib/core/lib/arn.ts` - Core hierarchical ARN implementation
+- `packages/aws-cdk-lib/core/test/arn.test.ts` - 14 comprehensive unit tests
 
 ### Validation Results
-- ✅ TypeScript compilation passes without errors
-- ✅ Interface provides better developer experience
-- ✅ Implementation correctly extracts AMI ID from IMachineImage
-- ✅ Consistent with AWS CDK patterns
+- ✅ All 14 hierarchical ARN tests pass (14/14 passed, 0 failed)
+- ✅ Full backward compatibility maintained (existing ARN formats unchanged)
+- ✅ TypeScript compilation successful
+- ✅ JSII compilation compatible
+- ✅ CloudFormation token support verified
+- ✅ Security best practices (fake account IDs and resource names in tests)
 
 ## Previous Task: AWS PCS Cluster Test Fixes
 

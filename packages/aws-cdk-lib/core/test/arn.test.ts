@@ -335,4 +335,244 @@ describe('arn', () => {
     expect(stack.resolve(parsed.resourceName)).toEqual('S3Access');
     expect(parsed.sep).toEqual('/');
   });
+
+  describe('hierarchical ARNs', () => {
+    test('parse AWS PCS hierarchical ARN', () => {
+      // GIVEN
+      const stack = new Stack();
+      const pcsArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id';
+
+      // WHEN
+      const parsed = Arn.split(pcsArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // THEN
+      expect(parsed).toEqual({
+        partition: 'aws',
+        service: 'pcs',
+        region: 'us-east-1',
+        account: '123456789012',
+        resource: 'computenodegroup', // leaf resource
+        resourceName: 'test-nodegroup-id', // leaf resource ID
+        sep: '/',
+        arnFormat: ArnFormat.HIERARCHICAL_SLASH_SEPARATED,
+        resourceHierarchy: [
+          { type: 'cluster', id: 'test-cluster-id' },
+          { type: 'computenodegroup', id: 'test-nodegroup-id' },
+        ],
+      });
+    });
+
+    test('parse complex hierarchical ARN with multiple levels', () => {
+      // GIVEN
+      const complexArn = 'arn:aws:service:us-west-2:123456789012:type1/id1/type2/id2/type3/id3';
+
+      // WHEN
+      const parsed = Arn.split(complexArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // THEN
+      expect(parsed.resource).toEqual('type3'); // leaf resource
+      expect(parsed.resourceName).toEqual('id3'); // leaf resource ID
+      expect(parsed.resourceHierarchy).toEqual([
+        { type: 'type1', id: 'id1' },
+        { type: 'type2', id: 'id2' },
+        { type: 'type3', id: 'id3' },
+      ]);
+    });
+
+    test('format hierarchical ARN from components', () => {
+      // GIVEN
+      const components = {
+        service: 'pcs',
+        region: 'us-east-1',
+        account: '123456789012',
+        partition: 'aws', // Explicitly provide partition
+        resource: 'computenodegroup',
+        resourceName: 'test-nodegroup-id',
+        arnFormat: ArnFormat.HIERARCHICAL_SLASH_SEPARATED,
+        resourceHierarchy: [
+          { type: 'cluster', id: 'test-cluster-id' },
+          { type: 'computenodegroup', id: 'test-nodegroup-id' },
+        ],
+      };
+
+      // WHEN
+      const formatted = Arn.format(components);
+
+      // THEN
+      expect(formatted).toEqual(
+        'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id'
+      );
+    });
+
+    test('round-trip hierarchical ARN parsing and formatting', () => {
+      // GIVEN
+      const originalArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id';
+      const stack = new Stack();
+
+      // WHEN
+      const parsed = Arn.split(originalArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+      const reformatted = stack.formatArn(parsed);
+
+      // THEN
+      expect(stack.resolve(reformatted)).toEqual(originalArn);
+    });
+
+    test('getHierarchicalResource extracts specific resource by type', () => {
+      // GIVEN
+      const pcsArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id';
+      const parsed = Arn.split(pcsArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // WHEN & THEN
+      expect(Arn.getHierarchicalResource(parsed, 'cluster')).toEqual('test-cluster-id');
+      expect(Arn.getHierarchicalResource(parsed, 'computenodegroup')).toEqual('test-nodegroup-id');
+      expect(Arn.getHierarchicalResource(parsed, 'nonexistent')).toBeUndefined();
+    });
+
+    test('getHierarchicalResource returns undefined for non-hierarchical ARNs', () => {
+      // GIVEN
+      const regularArn = 'arn:aws:s3:::my-bucket';
+      const parsed = Arn.split(regularArn, ArnFormat.NO_RESOURCE_NAME);
+
+      // WHEN & THEN
+      expect(Arn.getHierarchicalResource(parsed, 'bucket')).toBeUndefined();
+    });
+
+    test('getHierarchicalResourceTypes returns all resource types', () => {
+      // GIVEN
+      const pcsArn = 'arn:aws:pcs:us-east-1:123456789012:cluster/test-cluster-id/computenodegroup/test-nodegroup-id';
+      const parsed = Arn.split(pcsArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // WHEN
+      const types = Arn.getHierarchicalResourceTypes(parsed);
+
+      // THEN
+      expect(types).toEqual(['cluster', 'computenodegroup']);
+    });
+
+    test('getHierarchicalResourceTypes returns empty array for non-hierarchical ARNs', () => {
+      // GIVEN
+      const regularArn = 'arn:aws:s3:::my-bucket';
+      const parsed = Arn.split(regularArn, ArnFormat.NO_RESOURCE_NAME);
+
+      // WHEN
+      const types = Arn.getHierarchicalResourceTypes(parsed);
+
+      // THEN
+      expect(types).toEqual([]);
+    });
+
+    test('hierarchical ARN with tokens', () => {
+      // GIVEN
+      const stack = new Stack();
+      const theToken = { Ref: 'HierarchicalArn' };
+      const tokenArn = new Intrinsic(theToken).toString();
+
+      // WHEN
+      const parsed = Arn.split(tokenArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // THEN
+      expect(stack.resolve(parsed.partition)).toEqual({ 'Fn::Select': [1, { 'Fn::Split': [':', theToken] }] });
+      expect(stack.resolve(parsed.service)).toEqual({ 'Fn::Select': [2, { 'Fn::Split': [':', theToken] }] });
+      expect(stack.resolve(parsed.region)).toEqual({ 'Fn::Select': [3, { 'Fn::Split': [':', theToken] }] });
+      expect(stack.resolve(parsed.account)).toEqual({ 'Fn::Select': [4, { 'Fn::Split': [':', theToken] }] });
+      expect(parsed.sep).toEqual('/');
+      expect(parsed.arnFormat).toEqual(ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // For tokens, we can't parse the full hierarchy, but we can get basic resource info
+      expect(stack.resolve(parsed.resource)).toEqual({
+        'Fn::Select': [0, { 'Fn::Split': ['/', { 'Fn::Select': [5, { 'Fn::Split': [':', theToken] }] }] }],
+      });
+      expect(stack.resolve(parsed.resourceName)).toEqual({
+        'Fn::Select': [1, { 'Fn::Split': ['/', { 'Fn::Select': [5, { 'Fn::Split': [':', theToken] }] }] }],
+      });
+    });
+
+    test('hierarchical ARN with CloudFormation evaluation', () => {
+      // GIVEN
+      const stack = new Stack();
+      const theToken = Token.asString(new Intrinsic({ Ref: 'HierarchicalArn' }));
+      const actualArn = 'arn:aws:pcs:us-east-1:653539779824:cluster/pcs_l8d0gm4hpp/computenodegroup/pcs_szfb6p1t72';
+
+      // WHEN
+      const tokenParsed = Arn.split(theToken, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+      const cfnComponents = stack.resolve(tokenParsed);
+      const evaluated = evaluateCFN(cfnComponents, { HierarchicalArn: actualArn });
+
+      // THEN
+      expect(evaluated.service).toEqual('pcs');
+      expect(evaluated.region).toEqual('us-east-1');
+      expect(evaluated.account).toEqual('653539779824');
+      expect(evaluated.resource).toEqual('cluster'); // First resource type for tokens
+      expect(evaluated.resourceName).toEqual('pcs_l8d0gm4hpp'); // First resource ID for tokens
+    });
+
+    test('fail on invalid hierarchical ARN with odd number of components', () => {
+      // GIVEN
+      const invalidArn = 'arn:aws:pcs:us-east-1:653539779824:cluster/pcs_l8d0gm4hpp/computenodegroup';
+
+      // WHEN & THEN
+      expect(() => {
+        Arn.split(invalidArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+      }).toThrow(/Invalid hierarchical ARN format/);
+    });
+
+    test('hierarchical ARN with single resource pair', () => {
+      // GIVEN
+      const simpleHierarchicalArn = 'arn:aws:service:region:account:type/id';
+
+      // WHEN
+      const parsed = Arn.split(simpleHierarchicalArn, ArnFormat.HIERARCHICAL_SLASH_SEPARATED);
+
+      // THEN
+      expect(parsed.resource).toEqual('type');
+      expect(parsed.resourceName).toEqual('id');
+      expect(parsed.resourceHierarchy).toEqual([
+        { type: 'type', id: 'id' },
+      ]);
+    });
+
+    test('format hierarchical ARN without resourceHierarchy falls back to regular formatting', () => {
+      // GIVEN
+      const components = {
+        service: 'pcs',
+        region: 'us-east-1',
+        account: '653539779824',
+        partition: 'aws', // Explicitly provide partition
+        resource: 'computenodegroup',
+        resourceName: 'pcs_szfb6p1t72',
+        arnFormat: ArnFormat.HIERARCHICAL_SLASH_SEPARATED,
+        // No resourceHierarchy provided
+      };
+
+      // WHEN
+      const formatted = Arn.format(components);
+
+      // THEN - Should fall back to regular slash-separated formatting
+      expect(formatted).toEqual(
+        'arn:aws:pcs:us-east-1:653539779824:computenodegroup/pcs_szfb6p1t72'
+      );
+    });
+
+    test('backward compatibility - existing ARN formats unchanged', () => {
+      // GIVEN
+      const regularS3Arn = 'arn:aws:s3:::my-bucket/object.zip';
+      const regularIamArn = 'arn:aws:iam::123456789012:role/MyRole';
+      const colonSeparatedArn = 'arn:aws:codedeploy:region:account:application:WordPress_App';
+
+      // WHEN & THEN
+      const s3Parsed = Arn.split(regularS3Arn, ArnFormat.NO_RESOURCE_NAME);
+      expect(s3Parsed.resourceHierarchy).toBeUndefined();
+      expect(s3Parsed.resource).toEqual('my-bucket/object.zip');
+
+      const iamParsed = Arn.split(regularIamArn, ArnFormat.SLASH_RESOURCE_NAME);
+      expect(iamParsed.resourceHierarchy).toBeUndefined();
+      expect(iamParsed.resource).toEqual('role');
+      expect(iamParsed.resourceName).toEqual('MyRole');
+
+      const colonParsed = Arn.split(colonSeparatedArn, ArnFormat.COLON_RESOURCE_NAME);
+      expect(colonParsed.resourceHierarchy).toBeUndefined();
+      expect(colonParsed.resource).toEqual('application');
+      expect(colonParsed.resourceName).toEqual('WordPress_App');
+    });
+  });
 });
