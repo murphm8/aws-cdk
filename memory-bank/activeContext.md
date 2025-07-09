@@ -1,6 +1,74 @@
 # Active Context
 
-## Current Task: AWS PCS Cluster Test Fixes
+## Current Task: AWS PCS ComputeNodeGroup IMachineImage Update
+
+### Status: Complete
+
+Successfully updated AWS PCS ComputeNodeGroup to use `IMachineImage` instead of string for AMI parameter.
+
+### Just Completed
+- **Interface Modernization**: Changed `amiId?: string` to `machineImage?: ec2.IMachineImage` in `ComputeNodeGroupProps`
+- **Implementation Update**: Updated constructor to extract AMI ID using `props.machineImage.getImage(this).imageId`
+- **Developer Experience Enhancement**: Users can now use CDK machine image abstractions
+- **Type Safety Improvement**: Compile-time validation instead of runtime string validation
+- **CDK Consistency**: Aligned with other AWS CDK EC2 constructs that use `IMachineImage`
+
+### Technical Changes Made
+
+**Interface Update:**
+```typescript
+// Before: String-based AMI ID
+readonly amiId?: string;
+
+// After: IMachineImage interface
+readonly machineImage?: ec2.IMachineImage;
+```
+
+**Implementation Changes:**
+```typescript
+// New AMI ID extraction logic
+let amiId: string | undefined;
+if (props.machineImage) {
+  amiId = props.machineImage.getImage(this).imageId;
+}
+
+// Pass extracted AMI ID to CloudFormation
+this.cfnComputeNodeGroup = new CfnComputeNodeGroup(this, 'Resource', {
+  // ...
+  amiId: amiId,
+  // ...
+});
+```
+
+### Benefits Achieved
+- **Better Developer Experience**: Users can now use:
+  - `ec2.MachineImage.latestAmazonLinux2()`
+  - `ec2.MachineImage.fromSsmParameter()`
+  - `ec2.MachineImage.genericLinux()`
+  - Custom machine image implementations
+- **Type Safety**: No more manual AMI ID format validation needed
+- **Flexibility**: Supports both static AMI IDs and dynamic AMI resolution
+- **Consistency**: Matches patterns used in other CDK EC2 constructs
+
+### Usage Example
+```typescript
+// New usage with IMachineImage
+new ComputeNodeGroup(this, 'MyNodeGroup', {
+  machineImage: ec2.MachineImage.latestAmazonLinux2(),
+  // ... other props
+});
+```
+
+### Files Modified
+- `packages/aws-cdk-lib/aws-pcs/lib/compute-node-group.ts` - Updated interface and implementation
+
+### Validation Results
+- ✅ TypeScript compilation passes without errors
+- ✅ Interface provides better developer experience
+- ✅ Implementation correctly extracts AMI ID from IMachineImage
+- ✅ Consistent with AWS CDK patterns
+
+## Previous Task: AWS PCS Cluster Test Fixes
 
 ### Status: Complete
 

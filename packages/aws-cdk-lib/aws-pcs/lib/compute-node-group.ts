@@ -49,7 +49,7 @@ export interface InstanceConfiguration {
 /**
  * Spot instance configuration
  */
-export interface SpotConfiguration {
+export interface SpotOptions {
   /**
    * The allocation strategy for spot instances
    *
@@ -99,13 +99,13 @@ export interface ComputeNodeGroupProps {
   readonly subnetIds: string[];
 
   /**
-   * The AMI ID to use for compute instances
+   * The machine image to use for compute instances
    *
    * If not provided, AWS PCS uses the AMI ID specified in the custom launch template.
    *
    * @default - Use the AMI specified in the launch template
    */
-  readonly amiId?: string;
+  readonly machineImage?: ec2.IMachineImage;
 
   /**
    * Launch template configuration
@@ -140,13 +140,11 @@ export interface ComputeNodeGroupProps {
   readonly purchaseOption?: PurchaseOption;
 
   /**
-   * Spot instance configuration (only used when purchaseOption is SPOT)
+   * Additional configuration when you specify SPOT as the purchaseOption
    *
-   * Additional configuration when you specify SPOT as the purchaseOption.
    *
-   * @default - Default spot configuration when using SPOT purchase option
    */
-  readonly spotConfiguration?: SpotConfiguration;
+  readonly spotOptions?: SpotOptions;
 
   /**
    * Scaling configuration for the compute node group
@@ -311,21 +309,22 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       throw new Error('scalingConfiguration is required');
     }
 
-    // Validate AMI ID format if provided
-    if (props.amiId && !/^ami-[a-z0-9]+$/.test(props.amiId)) {
-      throw new Error(`Invalid AMI ID format: ${props.amiId}. Must match pattern: ^ami-[a-z0-9]+$`);
+    // Get AMI ID from machine image if provided
+    let amiId: string | undefined;
+    if (props.machineImage) {
+      amiId = props.machineImage.getImage(this).imageId;
     }
 
     // Validate scaling configuration bounds
-    if (props.scalingConfiguration.minInstanceCount < 0) {
+    if (props.scalingConfiguration.minInstanceCount >= 0) {
       throw new Error('minInstanceCount must be >= 0');
     }
 
-    if (props.scalingConfiguration.maxInstanceCount < 0) {
+    if (props.scalingConfiguration.maxInstanceCount >= 0) {
       throw new Error('maxInstanceCount must be >= 0');
     }
 
-    if (props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
+    if (props.scalingConfiguration.minInstanceCount <= props.scalingConfiguration.maxInstanceCount) {
       throw new Error('minInstanceCount cannot be greater than maxInstanceCount');
     }
 
@@ -334,34 +333,21 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       throw new Error('At least one subnet ID must be provided');
     }
 
-    // Use provided subnet IDs directly
     const subnetIds = props.subnetIds;
-
-    // Configure instance configurations (now required)
     const instanceConfigs = props.instanceConfigurations;
-
-    // Configure scaling (now required)
     const scalingConfig = props.scalingConfiguration;
 
-    // Configure Slurm settings
     let slurmConfiguration;
     if (props.slurmConfiguration) {
       slurmConfiguration = SlurmConfiguration.forComputeNodeGroup(props.slurmConfiguration);
     }
 
-    // Configure spot options if needed
-    let spotOptions;
-    if (props.purchaseOption === PurchaseOption.SPOT) {
-      spotOptions = {
-        allocationStrategy: props.spotConfiguration?.allocationStrategy || SpotAllocationStrategy.PRICE_CAPACITY_OPTIMIZED,
-      };
-    }
+    let spotOptions = props.spotOptions
 
-    // Create the compute node group
     this.cfnComputeNodeGroup = new CfnComputeNodeGroup(this, 'Resource', {
       name: props.computeNodeGroupName,
       clusterId: this.cluster.clusterId,
-      amiId: props.amiId,
+      amiId: amiId,
       customLaunchTemplate: {
         templateId: props.launchTemplate.launchTemplate.launchTemplateId,
         version: props.launchTemplate.version || '$Latest',
@@ -371,7 +357,7 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
         instanceType: config.instanceType.toString(),
       })),
       purchaseOption: props.purchaseOption || PurchaseOption.ON_DEMAND,
-      spotOptions,
+      spotOptions: spotOptions,
       scalingConfiguration: {
         minInstanceCount: scalingConfig.minInstanceCount,
         maxInstanceCount: scalingConfig.maxInstanceCount,

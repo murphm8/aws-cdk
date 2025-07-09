@@ -1,6 +1,6 @@
 # AWS CDK Project Progress
 
-## Current Status: AWS PCS Cluster Test Fixes - Complete
+## Current Status: AWS PCS ComputeNodeGroup IMachineImage Update - Complete
 
 ### Completed Work
 
@@ -57,7 +57,44 @@
   - Best practices and cost optimization tips
   - Preserved CDK stability banner and project info
 
-### Latest Update: AWS PCS Cluster Test Fixes
+### Latest Update: AWS PCS ComputeNodeGroup IMachineImage Update
+
+Successfully updated AWS PCS ComputeNodeGroup to use `IMachineImage` instead of string for AMI parameter:
+
+#### Interface Modernization
+- **Parameter Update**: Changed `amiId?: string` to `machineImage?: ec2.IMachineImage` in `ComputeNodeGroupProps`
+- **Implementation Enhancement**: Updated constructor to extract AMI ID using `props.machineImage.getImage(this).imageId`
+- **Type Safety**: Removed manual AMI ID format validation (now handled by `IMachineImage`)
+- **CDK Consistency**: Aligned with other AWS CDK EC2 constructs that use `IMachineImage`
+
+#### Developer Experience Benefits
+- **Better Abstractions**: Users can now use CDK machine image helpers:
+  - `ec2.MachineImage.latestAmazonLinux2()`
+  - `ec2.MachineImage.fromSsmParameter()`
+  - `ec2.MachineImage.genericLinux()`
+  - Custom machine image implementations
+- **Compile-time Validation**: Type safety instead of runtime string validation
+- **Dynamic Resolution**: Supports both static AMI IDs and dynamic AMI resolution
+
+#### Technical Implementation
+```typescript
+// Before: String-based AMI ID
+readonly amiId?: string;
+
+// After: IMachineImage interface
+readonly machineImage?: ec2.IMachineImage;
+
+// New usage example
+new ComputeNodeGroup(this, 'MyNodeGroup', {
+  machineImage: ec2.MachineImage.latestAmazonLinux2(),
+  // ... other props
+});
+```
+
+#### File Modified
+- `packages/aws-cdk-lib/aws-pcs/lib/compute-node-group.ts` - Updated interface and implementation
+
+### Previous Update: AWS PCS Cluster Test Fixes
 
 Successfully fixed failing AWS PCS cluster tests after the "from function to not need a cluster id" update:
 
