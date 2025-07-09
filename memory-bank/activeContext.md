@@ -1,12 +1,62 @@
 # Active Context
 
-## Current Task: AWS PCS Build Errors Fix
+## Current Task: AWS PCS Cluster Test Fixes
+
+### Status: Complete
+
+Successfully fixed failing AWS PCS cluster tests after the "from function to not need a cluster id" update.
+
+### Just Completed
+- **Fixed Cluster Test Failures**: Resolved test failures in `packages/aws-cdk-lib/aws-pcs/test/cluster.test.ts`
+- **Updated `fromClusterAttributes` Test**: Fixed test to match current implementation where cluster ID is derived from ARN
+- **Aligned with Interface Changes**: Test now correctly expects only `clusterArn` and `clusterName` in attributes
+- **Removed Invalid Parameters**: Eliminated `clusterId` parameter from test attributes that doesn't exist in interface
+
+### Issue Identified and Fixed
+The test failure was in the `fromClusterAttributes` test which was trying to provide a `clusterId` parameter that doesn't exist in the current `ClusterAttributes` interface:
+
+**Before (Failing Test):**
+```typescript
+// BROKEN: clusterId not in ClusterAttributes interface
+const attributes = {
+  clusterArn: 'arn:aws:pcs:us-west-2:123456789012:cluster/test-cluster-id',
+  clusterId: 'test-cluster-id', // ❌ Invalid parameter
+  clusterName: 'MyHPCCluster',
+};
+```
+
+**After (Fixed Test):**
+```typescript
+// FIXED: Only valid interface parameters
+const attributes = {
+  clusterArn: 'arn:aws:pcs:us-west-2:123456789012:cluster/test-cluster-id',
+  clusterName: 'MyHPCCluster',
+};
+// clusterId is derived from ARN: 'test-cluster-id'
+```
+
+### Technical Alignment
+This fix aligns with the user's update to make the "from function not need a cluster id":
+- **Cluster ID Derivation**: The `clusterId` is now automatically extracted from the `clusterArn`
+- **Simplified Interface**: `ClusterAttributes` only needs `clusterArn` and `clusterName`
+- **Consistent Pattern**: Matches other AWS CDK service patterns for resource import
+
+### Files Modified
+- `packages/aws-cdk-lib/aws-pcs/test/cluster.test.ts` - Fixed `fromClusterAttributes` test to use correct interface
+
+### Validation Results
+- ✅ Test now correctly validates that `clusterId` is derived from ARN
+- ✅ Interface usage matches actual `ClusterAttributes` definition
+- ✅ Test expectations align with implementation behavior
+- ✅ No more invalid parameter references in test
+
+## Previous Task: AWS PCS Build Errors Fix
 
 ### Status: Complete
 
 Successfully fixed AWS PCS L2 construct build errors related to awslint validation failures in method signatures.
 
-### Just Completed
+### Previous Work Completed
 - **Fixed Awslint Method Signature Errors**: Resolved awslint validation failures in AWS PCS L2 constructs
 - **Updated `fromXxx` Method Signatures**: Modified static import methods to conform to CDK standards:
   - `ComputeNodeGroup.fromComputeNodeGroupArn()` - reduced from 4 to 3 parameters

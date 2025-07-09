@@ -1,6 +1,6 @@
 # AWS CDK Project Progress
 
-## Current Status: AWS PCS Build Errors Fixed - Complete
+## Current Status: AWS PCS Cluster Test Fixes - Complete
 
 ### Completed Work
 
@@ -57,7 +57,24 @@
   - Best practices and cost optimization tips
   - Preserved CDK stability banner and project info
 
-### Latest Update: AWS PCS Build Errors Fixed
+### Latest Update: AWS PCS Cluster Test Fixes
+
+Successfully fixed failing AWS PCS cluster tests after the "from function to not need a cluster id" update:
+
+#### Test Failure Resolution
+- **Fixed Test Failures**: Resolved failing tests in `packages/aws-cdk-lib/aws-pcs/test/cluster.test.ts`
+- **Interface Alignment**: Updated `fromClusterAttributes` test to match current implementation
+- **Parameter Cleanup**: Removed invalid `clusterId` parameter from test attributes
+- **Implementation Match**: Test now correctly expects cluster ID to be derived from ARN
+- **User Request Alignment**: Fixed tests to work with "from function to not need a cluster id" update
+
+#### Technical Details
+- **Root Cause**: Test was providing `clusterId` parameter that doesn't exist in `ClusterAttributes` interface
+- **Solution**: Updated test to only use valid interface parameters (`clusterArn` and `clusterName`)
+- **Validation**: Test now correctly validates that `clusterId` is automatically derived from the ARN
+- **File Modified**: `packages/aws-cdk-lib/aws-pcs/test/cluster.test.ts`
+
+### Previous Update: AWS PCS Build Errors Fixed
 
 Successfully resolved all build errors in AWS PCS L2 constructs and completed awslint validation fixes:
 
