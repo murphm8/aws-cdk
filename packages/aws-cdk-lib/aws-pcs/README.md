@@ -31,76 +31,104 @@ AWS Parallel Computing Service (PCS) provides managed high-performance computing
 
 ## L2 Constructs
 
-### Basic Usage
+### Creating a Cluster
 
-```typescript
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as pcs from 'aws-cdk-lib/aws-pcs';
+A cluster requires subnet IDs, security groups, a size, and a scheduler configuration:
 
-// Create VPC for the cluster
-const vpc = new ec2.Vpc(this, 'HpcVpc', {
-  maxAzs: 2,
-  natGateways: 1,
-});
+```ts
+declare const vpc: ec2.IVpc;
+declare const securityGroup: ec2.ISecurityGroup;
 
-// Create the PCS cluster
 const cluster = new pcs.Cluster(this, 'HpcCluster', {
   clusterName: 'my-hpc-cluster',
-  vpc: vpc,
+  subnetIds: [vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds[0]],
+  securityGroups: [securityGroup],
   size: pcs.ClusterSize.SMALL,
   scheduler: {
     type: pcs.SchedulerType.SLURM,
     version: '23.11',
   },
 });
+```
 
-// Create a launch template for compute nodes
-const launchTemplate = pcs.ComputeNodeGroup.createBasicLaunchTemplate(this, 'LaunchTemplate', {
-  vpc: vpc,
-  instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE),
+### Creating a ComputeNodeGroup
+
+A compute node group requires a cluster, subnets, a launch template, an IAM instance profile,
+instance configurations, and a scaling configuration:
+
+```ts
+declare const cluster: pcs.Cluster;
+declare const vpc: ec2.IVpc;
+declare const instanceProfile: iam.IInstanceProfile;
+
+const launchTemplate = new ec2.LaunchTemplate(this, 'ComputeLT', {
+  machineImage: ec2.MachineImage.latestAmazonLinux2023(),
 });
 
-// Create compute node group
 const computeNodeGroup = new pcs.ComputeNodeGroup(this, 'ComputeNodes', {
-  cluster: cluster,
+  cluster,
+  subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
   launchTemplate: {
-    launchTemplate: launchTemplate,
+    launchTemplate,
   },
+  instanceProfile,
+  instanceConfigurations: [
+    { instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE) },
+  ],
   scalingConfiguration: {
     minInstanceCount: 0,
     maxInstanceCount: 10,
   },
 });
+```
 
-// Create a queue to manage jobs
+### Creating a Queue
+
+A queue belongs to a cluster and can be associated with one or more compute node groups:
+
+```ts
+declare const cluster: pcs.Cluster;
+declare const computeNodeGroup: pcs.ComputeNodeGroup;
+
 const queue = new pcs.Queue(this, 'JobQueue', {
-  cluster: cluster,
+  queueName: 'main',
+  cluster,
   computeNodeGroupConfigurations: [
-    { computeNodeGroup: computeNodeGroup },
+    { computeNodeGroup },
   ],
 });
 ```
 
-### Advanced Configuration
+You can also add compute node groups to a queue after creation:
 
-```typescript
-// Advanced Slurm configuration
-const advancedCluster = new pcs.Cluster(this, 'AdvancedCluster', {
-  vpc: vpc,
-  size: pcs.ClusterSize.LARGE,
-  slurmConfiguration: {
-    accounting: pcs.SlurmConfiguration.standardAccounting(30),
-    scaleDownIdleTimeInSeconds: 300,
-    customSettings: pcs.SlurmConfiguration.commonHpcSettings(),
-  },
-});
+```ts
+declare const queue: pcs.Queue;
+declare const anotherComputeNodeGroup: pcs.ComputeNodeGroup;
 
-// Spot instance compute group
+queue.addComputeNodeGroup(anotherComputeNodeGroup);
+```
+
+### Spot Instances
+
+To use spot instances, set the `purchaseOption` and configure `spotOptions`:
+
+```ts
+declare const cluster: pcs.Cluster;
+declare const vpc: ec2.IVpc;
+declare const launchTemplate: ec2.LaunchTemplate;
+declare const instanceProfile: iam.IInstanceProfile;
+
 const spotComputeGroup = new pcs.ComputeNodeGroup(this, 'SpotCompute', {
-  cluster: advancedCluster,
-  launchTemplate: { launchTemplate: launchTemplate },
+  cluster,
+  subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+  launchTemplate: { launchTemplate },
+  instanceProfile,
+  instanceConfigurations: [
+    { instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE) },
+    { instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE2) },
+  ],
   purchaseOption: pcs.PurchaseOption.SPOT,
-  spotConfiguration: {
+  spotOptions: {
     allocationStrategy: pcs.SpotAllocationStrategy.CAPACITY_OPTIMIZED,
   },
   scalingConfiguration: {
@@ -110,24 +138,111 @@ const spotComputeGroup = new pcs.ComputeNodeGroup(this, 'SpotCompute', {
 });
 ```
 
+### Slurm Configuration
+
+Use the `SlurmConfiguration` helper class to configure cluster-level Slurm settings:
+
+```ts
+declare const vpc: ec2.IVpc;
+declare const securityGroup: ec2.ISecurityGroup;
+
+const cluster = new pcs.Cluster(this, 'AdvancedCluster', {
+  subnetIds: [vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds[0]],
+  securityGroups: [securityGroup],
+  size: pcs.ClusterSize.LARGE,
+  scheduler: {
+    type: pcs.SchedulerType.SLURM,
+    version: '23.11',
+  },
+  slurmConfiguration: {
+    accounting: pcs.SlurmConfiguration.standardAccounting(30),
+    scaleDownIdleTimeInSeconds: 300,
+    customSettings: pcs.SlurmConfiguration.commonHpcSettings(),
+  },
+});
+```
+
+Compute node groups can also have Slurm-specific custom settings:
+
+```ts
+declare const cluster: pcs.Cluster;
+declare const vpc: ec2.IVpc;
+declare const launchTemplate: ec2.LaunchTemplate;
+declare const instanceProfile: iam.IInstanceProfile;
+
+const cng = new pcs.ComputeNodeGroup(this, 'ComputeNodes', {
+  cluster,
+  subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+  launchTemplate: { launchTemplate },
+  instanceProfile,
+  instanceConfigurations: [
+    { instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE) },
+  ],
+  scalingConfiguration: { minInstanceCount: 0, maxInstanceCount: 10 },
+  slurmConfiguration: {
+    customSettings: [
+      { parameterName: 'Weight', parameterValue: '1' },
+    ],
+  },
+});
+```
+
+### Importing Existing Resources
+
+You can import existing PCS resources by ARN, ID, or attributes:
+
+```ts
+// Import a cluster by ARN
+const importedCluster = pcs.Cluster.fromClusterArn(this, 'ImportedCluster',
+  'arn:aws:pcs:us-west-2:123456789012:cluster/cls-12345',
+);
+
+// Import a cluster by ID
+const importedClusterById = pcs.Cluster.fromClusterId(this, 'ImportedCluster2', 'cls-12345');
+
+// Import a cluster by attributes
+const importedClusterByAttrs = pcs.Cluster.fromClusterAttributes(this, 'ImportedCluster3', {
+  clusterArn: 'arn:aws:pcs:us-west-2:123456789012:cluster/cls-12345',
+  clusterName: 'my-hpc-cluster',
+});
+
+// Import a compute node group by ARN (cluster is parsed from the ARN)
+const importedCng = pcs.ComputeNodeGroup.fromComputeNodeGroupArn(this, 'ImportedCNG',
+  'arn:aws:pcs:us-west-2:123456789012:computenodegroup/cls-12345/cng-67890',
+);
+
+// Import a compute node group by ID (requires cluster reference)
+const importedCngById = pcs.ComputeNodeGroup.fromComputeNodeGroupId(
+  this, 'ImportedCNG2', importedCluster, 'cng-67890',
+);
+
+// Import a queue by ARN (cluster is parsed from the ARN)
+const importedQueue = pcs.Queue.fromQueueArn(this, 'ImportedQueue',
+  'arn:aws:pcs:us-west-2:123456789012:queue/cls-12345/q-67890',
+);
+
+// Import a queue by ID (requires cluster reference)
+const importedQueueById = pcs.Queue.fromQueueId(
+  this, 'ImportedQueue2', importedCluster, 'q-67890',
+);
+```
+
 ### Key Features
 
-- **Sensible Defaults**: Minimal configuration required for common HPC use cases
-- **Slurm Integration**: Built-in support for Slurm accounting and custom settings
-- **Cost Optimization**: Spot instance support and auto-scaling capabilities
-- **Security**: Automatic security group and IAM role creation
-- **Import Support**: Import existing PCS resources using ARN or ID
+- **Slurm Integration**: Built-in support for Slurm accounting, auth keys, and custom settings
+- **Cost Optimization**: Spot instance support with configurable allocation strategies and auto-scaling
+- **Import Support**: Import existing PCS resources using ARN, ID, or attributes
 
 ### Available Constructs
 
 #### L2 Constructs
-- `Cluster` - High-level cluster construct with sensible defaults
-- `ComputeNodeGroup` - Managed compute resources with scaling configuration
+- `Cluster` - High-level cluster construct with networking and scheduler configuration
+- `ComputeNodeGroup` - Managed compute resources with scaling configuration and launch templates
 - `Queue` - Job queue management with compute node group associations
 
 #### Helper Classes
-- `SlurmConfiguration` - Builder for Slurm settings
-- Enums for cluster sizes, purchase options, and allocation strategies
+- `SlurmConfiguration` - Builder for Slurm settings (accounting, auth keys, custom settings)
+- Enums: `ClusterSize`, `SchedulerType`, `PurchaseOption`, `SpotAllocationStrategy`, `AccountingMode`
 
 ## L1 Constructs
 

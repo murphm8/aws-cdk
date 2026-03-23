@@ -1,5 +1,5 @@
 import * as constructs from 'constructs';
-import { ICluster } from './cluster';
+import { Cluster, ICluster } from './cluster';
 import { IComputeNodeGroup } from './compute-node-group';
 import { CfnQueue } from './pcs.generated';
 import * as cdk from '../../core';
@@ -128,42 +128,77 @@ export class Queue extends cdk.Resource implements IQueue {
 
   /**
    * Import an existing queue by its ARN
+   *
+   * The ARN is expected to be in the format:
+   * `arn:aws:pcs:region:account:queue/cluster-id/queue-id`
+   *
+   * The cluster reference is automatically parsed from the ARN.
+   * For full control over the cluster reference, use `fromQueueAttributes` instead.
    */
   public static fromQueueArn(scope: constructs.Construct, id: string, queueArn: string): IQueue {
     const arnParts = cdk.Arn.split(queueArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
-    const queueId = arnParts.resourceName;
+    const resourceName = arnParts.resourceName;
 
-    if (!queueId) {
+    if (!resourceName) {
       throw new InvalidQueueArnError(queueArn);
     }
 
+    // PCS queue ARNs have the format: queue/cluster-id/queue-id
+    const parts = resourceName.split('/');
+    if (parts.length !== 2) {
+      throw new InvalidQueueArnError(queueArn);
+    }
+
+    const [clusterId, queueId] = parts;
+
+    // Build the cluster ARN from the same ARN components
+    const clusterArn = cdk.Arn.format({
+      service: arnParts.service,
+      resource: 'cluster',
+      resourceName: clusterId,
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+      partition: arnParts.partition,
+      region: arnParts.region,
+      account: arnParts.account,
+    });
+
+    const importedCluster = Cluster.fromClusterArn(scope, `${id}Cluster`, clusterArn);
+
     class Import extends cdk.Resource implements IQueue {
       public readonly queueArn = queueArn;
-      public readonly queueId = queueId!;
-      public readonly queueName = queueId!;
-      // Create a minimal cluster reference - users should use fromQueueAttributes for full control
-      public readonly cluster: ICluster = {
-        clusterId: 'unknown',
-        clusterArn: 'unknown',
-        clusterName: 'unknown',
-      } as ICluster;
+      public readonly queueId = queueId;
+      public readonly queueName = queueId;
+      public readonly cluster = importedCluster;
     }
 
     return new Import(scope, id);
   }
 
   /**
-   * Import an existing queue by its ID
+   * Import an existing queue by its ID and cluster
+   *
+   * @param scope The construct scope
+   * @param id The construct ID
+   * @param cluster The cluster this queue belongs to
+   * @param queueId The ID of the queue
    */
-  public static fromQueueId(scope: constructs.Construct, id: string, queueId: string): IQueue {
+  public static fromQueueId(scope: constructs.Construct, id: string, cluster: ICluster, queueId: string): IQueue {
     const stack = cdk.Stack.of(scope);
     const queueArn = cdk.Arn.format({
       service: 'pcs',
       resource: 'queue',
-      resourceName: queueId,
+      resourceName: `${cluster.clusterId}/${queueId}`,
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
     }, stack);
 
-    return Queue.fromQueueArn(scope, id, queueArn);
+    class Import extends cdk.Resource implements IQueue {
+      public readonly queueArn = queueArn;
+      public readonly queueId = queueId;
+      public readonly queueName = queueId;
+      public readonly cluster = cluster;
+    }
+
+    return new Import(scope, id);
   }
 
   public readonly queueArn: string;

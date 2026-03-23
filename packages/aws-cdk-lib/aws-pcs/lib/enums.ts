@@ -35,12 +35,18 @@ export enum PurchaseOption {
   /**
    * On-Demand instances
    */
-  ON_DEMAND = 'ON_DEMAND',
+  ON_DEMAND = 'ONDEMAND',
 
   /**
    * Spot instances
    */
   SPOT = 'SPOT',
+
+  /**
+   * Amazon EC2 Capacity Blocks for ML
+   * @see https://docs.aws.amazon.com/pcs/latest/userguide/capacity-blocks.html
+   */
+  CAPACITY_BLOCK = 'CAPACITY_BLOCK',
 }
 
 /**

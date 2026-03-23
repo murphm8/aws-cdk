@@ -1,5 +1,5 @@
 import * as constructs from 'constructs';
-import { ICluster } from './cluster';
+import { Cluster, ICluster } from './cluster';
 import { PurchaseOption, SpotAllocationStrategy } from './enums';
 import { CfnComputeNodeGroup } from './pcs.generated';
 import { ComputeNodeGroupSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
@@ -256,42 +256,77 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
 
   /**
    * Import an existing compute node group by its ARN
+   *
+   * The ARN is expected to be in the format:
+   * `arn:aws:pcs:region:account:computenodegroup/cluster-id/cng-id`
+   *
+   * The cluster reference is automatically parsed from the ARN.
+   * For full control over the cluster reference, use `fromComputeNodeGroupAttributes` instead.
    */
   public static fromComputeNodeGroupArn(scope: constructs.Construct, id: string, computeNodeGroupArn: string): IComputeNodeGroup {
     const arnParts = cdk.Arn.split(computeNodeGroupArn, cdk.ArnFormat.SLASH_RESOURCE_NAME);
-    const computeNodeGroupId = arnParts.resourceName;
+    const resourceName = arnParts.resourceName;
 
-    if (!computeNodeGroupId) {
+    if (!resourceName) {
       throw new InvalidComputeNodeGroupArnError(computeNodeGroupArn);
     }
 
+    // PCS compute node group ARNs have the format: computenodegroup/cluster-id/cng-id
+    const parts = resourceName.split('/');
+    if (parts.length !== 2) {
+      throw new InvalidComputeNodeGroupArnError(computeNodeGroupArn);
+    }
+
+    const [clusterId, computeNodeGroupId] = parts;
+
+    // Build the cluster ARN from the same ARN components
+    const clusterArn = cdk.Arn.format({
+      service: arnParts.service,
+      resource: 'cluster',
+      resourceName: clusterId,
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+      partition: arnParts.partition,
+      region: arnParts.region,
+      account: arnParts.account,
+    });
+
+    const importedCluster = Cluster.fromClusterArn(scope, `${id}Cluster`, clusterArn);
+
     class Import extends cdk.Resource implements IComputeNodeGroup {
       public readonly computeNodeGroupArn = computeNodeGroupArn;
-      public readonly computeNodeGroupId = computeNodeGroupId!;
-      public readonly computeNodeGroupName = computeNodeGroupId!;
-      // Create a minimal cluster reference - users should use fromComputeNodeGroupAttributes for full control
-      public readonly cluster: ICluster = {
-        clusterId: 'unknown',
-        clusterArn: 'unknown',
-        clusterName: 'unknown',
-      } as ICluster;
+      public readonly computeNodeGroupId = computeNodeGroupId;
+      public readonly computeNodeGroupName = computeNodeGroupId;
+      public readonly cluster = importedCluster;
     }
 
     return new Import(scope, id);
   }
 
   /**
-   * Import an existing compute node group by its ID
+   * Import an existing compute node group by its ID and cluster
+   *
+   * @param scope The construct scope
+   * @param id The construct ID
+   * @param cluster The cluster this compute node group belongs to
+   * @param computeNodeGroupId The ID of the compute node group
    */
-  public static fromComputeNodeGroupId(scope: constructs.Construct, id: string, computeNodeGroupId: string): IComputeNodeGroup {
+  public static fromComputeNodeGroupId(scope: constructs.Construct, id: string, cluster: ICluster, computeNodeGroupId: string): IComputeNodeGroup {
     const stack = cdk.Stack.of(scope);
     const computeNodeGroupArn = cdk.Arn.format({
       service: 'pcs',
       resource: 'computenodegroup',
-      resourceName: computeNodeGroupId,
+      resourceName: `${cluster.clusterId}/${computeNodeGroupId}`,
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
     }, stack);
 
-    return ComputeNodeGroup.fromComputeNodeGroupArn(scope, id, computeNodeGroupArn);
+    class Import extends cdk.Resource implements IComputeNodeGroup {
+      public readonly computeNodeGroupArn = computeNodeGroupArn;
+      public readonly computeNodeGroupId = computeNodeGroupId;
+      public readonly computeNodeGroupName = computeNodeGroupId;
+      public readonly cluster = cluster;
+    }
+
+    return new Import(scope, id);
   }
 
   public readonly computeNodeGroupArn: string;
@@ -325,16 +360,20 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       amiId = props.machineImage.getImage(this).imageId;
     }
 
-    // Validate scaling configuration bounds
-    if (props.scalingConfiguration.minInstanceCount <= 0) {
+    // Validate scaling configuration bounds (skip validation for unresolved tokens)
+    if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
+      && props.scalingConfiguration.minInstanceCount < 0) {
       throw new ComputeNodeGroupValidationError('minInstanceCount must be >= 0');
     }
 
-    if (props.scalingConfiguration.maxInstanceCount <= 0) {
+    if (!cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
+      && props.scalingConfiguration.maxInstanceCount < 0) {
       throw new ComputeNodeGroupValidationError('maxInstanceCount must be >= 0');
     }
 
-    if (props.scalingConfiguration.minInstanceCount <= props.scalingConfiguration.maxInstanceCount) {
+    if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
+      && !cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
+      && props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
       throw new ComputeNodeGroupValidationError('minInstanceCount cannot be greater than maxInstanceCount');
     }
 
