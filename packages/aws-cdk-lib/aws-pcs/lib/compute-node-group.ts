@@ -391,7 +391,12 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       slurmConfiguration = SlurmConfiguration.forComputeNodeGroup(props.slurmConfiguration);
     }
 
-    let spotOptions = props.spotOptions;
+    let spotOptions: SpotOptions | undefined = props.spotOptions;
+    if (props.purchaseOption === PurchaseOption.SPOT && !spotOptions) {
+      spotOptions = {
+        allocationStrategy: SpotAllocationStrategy.PRICE_CAPACITY_OPTIMIZED,
+      };
+    }
 
     this.cfnComputeNodeGroup = new CfnComputeNodeGroup(this, 'Resource', {
       name: props.computeNodeGroupName,

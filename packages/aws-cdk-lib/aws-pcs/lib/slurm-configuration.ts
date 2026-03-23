@@ -32,8 +32,9 @@ export interface SlurmAuthKeyProps {
   /**
    * The version of the secret to use
    *
+   * @default 'AWSCURRENT'
    */
-  readonly secretVersion: string;
+  readonly secretVersion?: string;
 }
 
 /**
