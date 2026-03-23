@@ -2,6 +2,7 @@ import * as constructs from 'constructs';
 import { Cluster, ICluster } from './cluster';
 import { IComputeNodeGroup } from './compute-node-group';
 import { CfnQueue } from './pcs.generated';
+import { QueueSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as cdk from '../../core';
 
 /**
@@ -46,6 +47,12 @@ export interface QueueProps {
    * @default - No compute node groups associated
    */
   readonly computeNodeGroupConfigurations?: ComputeNodeGroupConfiguration[];
+
+  /**
+   * Slurm-specific configuration options for the queue
+   * @default - No Slurm configuration
+   */
+  readonly slurmConfiguration?: QueueSlurmConfigurationProps;
 
   /**
    * Tags to apply to the queue
@@ -220,11 +227,18 @@ export class Queue extends cdk.Resource implements IQueue {
       computeNodeGroupId: config.computeNodeGroup.computeNodeGroupId,
     }));
 
+    // Configure Slurm settings
+    let slurmConfiguration;
+    if (props.slurmConfiguration) {
+      slurmConfiguration = SlurmConfiguration.forQueue(props.slurmConfiguration);
+    }
+
     // Create the queue
     this.cfnQueue = new CfnQueue(this, 'Resource', {
       name: props.queueName,
       clusterId: this.cluster.clusterId,
       computeNodeGroupConfigurations: computeNodeGroupConfigurations.length > 0 ? computeNodeGroupConfigurations : undefined,
+      slurmConfiguration,
       tags: props.tags,
     });
 
