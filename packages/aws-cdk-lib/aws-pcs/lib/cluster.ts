@@ -1,5 +1,5 @@
 import * as constructs from 'constructs';
-import { SchedulerType, ClusterSize } from './enums';
+import { SchedulerType, ClusterSize, NetworkType } from './enums';
 import { CfnCluster } from './pcs.generated';
 import { ClusterSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as ec2 from '../../aws-ec2';
@@ -68,6 +68,12 @@ export interface ClusterProps {
   readonly slurmConfiguration?: ClusterSlurmConfigurationProps;
 
   /**
+   * The IP address type for the cluster networking
+   * @default - No network type specified (CFN defaults to IPV4)
+   */
+  readonly networkType?: NetworkType;
+
+  /**
    * Tags to apply to the cluster
    * @default - No tags
    */
@@ -110,6 +116,31 @@ export interface ClusterAttributes {
    * The name of the cluster
    */
   readonly clusterName: string;
+}
+
+/**
+ * Represents an endpoint for connecting to the cluster scheduler.
+ * This is the shape of objects returned by the CloudFormation Endpoints attribute.
+ */
+export interface Endpoint {
+  /** The type of endpoint (e.g., 'SLURMCTLD', 'SLURMDBD') */
+  readonly type: string;
+  /** The private IP address of the endpoint */
+  readonly privateIpAddress: string;
+  /** The port number of the endpoint */
+  readonly port: string;
+  /** The public IP address of the endpoint, if available */
+  readonly publicIpAddress?: string;
+}
+
+/**
+ * Represents error information returned by CloudFormation when a resource fails to provision.
+ */
+export interface ErrorInfo {
+  /** The error code */
+  readonly code: string;
+  /** The error message */
+  readonly message: string;
 }
 
 /**
@@ -188,7 +219,8 @@ export class Cluster extends cdk.Resource implements ICluster {
       size: props.size,
       networking: {
         subnetIds: props.subnetIds,
-        securityGroupIds: props.securityGroups.map(sg => sg.securityGroupId),
+        securityGroupIds: props.securityGroups?.map(sg => sg.securityGroupId),
+        networkType: props.networkType,
       },
       scheduler: {
         type: scheduler.type,

@@ -1,4 +1,4 @@
-import { AccountingMode } from './enums';
+import { AccountingMode, SlurmRestMode } from './enums';
 import { CfnCluster, CfnComputeNodeGroup } from './pcs.generated';
 
 /**
@@ -52,6 +52,32 @@ export interface SlurmCustomSetting {
 }
 
 /**
+ * Properties for configuring JWT authentication for Slurm
+ */
+export interface JwtAuthProps {
+  /**
+   * The ARN of the AWS Secrets Manager secret containing the JWT key
+   */
+  readonly secretArn: string;
+
+  /**
+   * The version of the secret to use
+   * @default '1'
+   */
+  readonly secretVersion?: string;
+}
+
+/**
+ * Properties for configuring the Slurm REST API
+ */
+export interface SlurmRestProps {
+  /**
+   * The mode for the Slurm REST API
+   */
+  readonly mode: SlurmRestMode;
+}
+
+/**
  * Properties for configuring Slurm settings on a cluster
  */
 export interface ClusterSlurmConfigurationProps {
@@ -82,6 +108,18 @@ export interface ClusterSlurmConfigurationProps {
    * @default - No custom settings
    */
   readonly customSettings?: SlurmCustomSetting[];
+
+  /**
+   * JWT authentication configuration for the Slurm scheduler
+   * @default - No JWT auth configured
+   */
+  readonly jwtAuth?: JwtAuthProps;
+
+  /**
+   * Slurm REST API configuration
+   * @default - No SlurmRest configured
+   */
+  readonly slurmRest?: SlurmRestProps;
 }
 
 /**
@@ -129,6 +167,21 @@ export class SlurmConfiguration {
         parameterName: setting.parameterName,
         parameterValue: setting.parameterValue,
       }));
+    }
+
+    if (props.jwtAuth) {
+      result.jwtAuth = {
+        jwtKey: {
+          secretArn: props.jwtAuth.secretArn,
+          secretVersion: props.jwtAuth.secretVersion ?? '1',
+        },
+      };
+    }
+
+    if (props.slurmRest) {
+      result.slurmRest = {
+        mode: props.slurmRest.mode,
+      };
     }
 
     return result;

@@ -83,3 +83,33 @@ export enum AccountingMode {
    */
   STANDARD = 'STANDARD',
 }
+
+/**
+ * The IP address type for cluster networking
+ */
+export enum NetworkType {
+  /**
+   * IPv4 networking
+   */
+  IPV4 = 'IPV4',
+
+  /**
+   * IPv6 networking
+   */
+  IPV6 = 'IPV6',
+}
+
+/**
+ * Mode for the Slurm REST API
+ */
+export enum SlurmRestMode {
+  /**
+   * Slurm REST API is enabled
+   */
+  STANDARD = 'STANDARD',
+
+  /**
+   * Slurm REST API is disabled
+   */
+  NONE = 'NONE',
+}
