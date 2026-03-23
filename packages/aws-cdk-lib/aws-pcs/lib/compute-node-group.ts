@@ -78,9 +78,12 @@ export interface LaunchTemplateConfiguration {
   readonly launchTemplate: ec2.ILaunchTemplate;
 
   /**
-   * The version of the launch template to use
+   * The version of the launch template to use.
    *
-   * @default '$Latest'
+   * AWS PCS requires a numeric version string (e.g., '1', '2').
+   * Values like '$Latest' or '$Default' are not supported.
+   *
+   * @default '1'
    */
   readonly version?: string;
 }
@@ -417,7 +420,7 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       amiId: amiId,
       customLaunchTemplate: {
         templateId: props.launchTemplate.launchTemplate.launchTemplateId,
-        version: props.launchTemplate.version || '$Latest',
+        version: props.launchTemplate.version || '1',
       },
       iamInstanceProfileArn: this.instanceProfile.instanceProfileArn,
       instanceConfigs: instanceConfigs.map(config => ({

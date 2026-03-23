@@ -24,6 +24,9 @@ const clusterSg = new ec2.SecurityGroup(stack, 'ClusterSG', {
   allowAllOutbound: true,
 });
 
+// PCS requires at least one inbound rule on the cluster security group
+clusterSg.addIngressRule(clusterSg, ec2.Port.allTraffic(), 'Allow cluster-internal traffic');
+
 // PCS Cluster
 const cluster = new pcs.Cluster(stack, 'Cluster', {
   clusterName: 'integ-test-cluster',
@@ -41,7 +44,7 @@ const nodeRole = new iam.Role(stack, 'NodeRole', {
   assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
   path: '/aws-pcs/',
   managedPolicies: [
-    iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonPCSComputeNodePolicy'),
+    iam.ManagedPolicy.fromAwsManagedPolicyName('AWSPCSComputeNodePolicy'),
   ],
 });
 
@@ -50,10 +53,11 @@ const instanceProfile = new iam.InstanceProfile(stack, 'NodeProfile', {
   role: nodeRole,
 });
 
-// Launch Template
+// Launch Template - must include security group for PCS
 const launchTemplate = new ec2.LaunchTemplate(stack, 'LaunchTemplate', {
   machineImage: ec2.MachineImage.latestAmazonLinux2023(),
   instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE),
+  securityGroup: clusterSg,
 });
 
 // Compute Node Group
