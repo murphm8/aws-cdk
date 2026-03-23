@@ -125,11 +125,13 @@ export interface ComputeNodeGroupProps {
   readonly launchTemplate: LaunchTemplateConfiguration;
 
   /**
-   * The IAM instance profile for compute instances
+   * The IAM instance profile for compute instances.
    *
-   * The Amazon Resource Name (ARN) of the IAM instance profile used to pass an IAM role when launching EC2 instances.
-   * The role contained in your instance profile must have pcs:RegisterComputeNodeGroupInstance
-   * permissions attached to provision instances correctly.
+   * The role contained in your instance profile must have
+   * `pcs:RegisterComputeNodeGroupInstance` permissions and the role name
+   * must start with `AWSPCS` or have the path `/aws-pcs/`.
+   *
+   * @see https://docs.aws.amazon.com/pcs/latest/userguide/security-instance-profiles.html
    */
   readonly instanceProfile: iam.IInstanceProfile;
 
@@ -380,6 +382,17 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     // Validate subnet IDs are provided
     if (!props.subnetIds || props.subnetIds.length === 0) {
       throw new ComputeNodeGroupValidationError('At least one subnet ID must be provided');
+    }
+
+    // Validate instance profile ARN format
+    const profileArn = this.instanceProfile.instanceProfileArn;
+    if (!cdk.Token.isUnresolved(profileArn)) {
+      if (!profileArn.startsWith('arn:')) {
+        throw new ComputeNodeGroupValidationError(
+          `instanceProfile must have a valid ARN format, got: ${profileArn}. ` +
+          'The role must start with "AWSPCS" or have path "/aws-pcs/".',
+        );
+      }
     }
 
     const subnetIds = props.subnetIds;

@@ -1,5 +1,6 @@
 import { AccountingMode, SlurmRestMode } from './enums';
 import { CfnCluster, CfnComputeNodeGroup, CfnQueue } from './pcs.generated';
+import * as cdk from '../../core';
 
 /**
  * Properties for configuring Slurm accounting
@@ -154,6 +155,26 @@ export class SlurmConfiguration {
    * Creates a Slurm configuration for a cluster
    */
   public static forCluster(props: ClusterSlurmConfigurationProps): CfnCluster.SlurmConfigurationProperty {
+    // Validate scaleDownIdleTimeInSeconds
+    if (props.scaleDownIdleTimeInSeconds !== undefined
+        && !cdk.Token.isUnresolved(props.scaleDownIdleTimeInSeconds)) {
+      if (props.scaleDownIdleTimeInSeconds < 1) {
+        throw new Error(`scaleDownIdleTimeInSeconds must be >= 1, got: ${props.scaleDownIdleTimeInSeconds}`);
+      }
+    }
+
+    // Validate defaultPurgeTimeInDays
+    if (props.accounting?.defaultPurgeTimeInDays !== undefined
+        && !cdk.Token.isUnresolved(props.accounting.defaultPurgeTimeInDays)) {
+      const val = props.accounting.defaultPurgeTimeInDays;
+      if (val === 0) {
+        throw new Error('defaultPurgeTimeInDays cannot be 0');
+      }
+      if (val < -1 || val > 10000) {
+        throw new Error(`defaultPurgeTimeInDays must be between -1 and 10000, got: ${val}`);
+      }
+    }
+
     const result: any = {};
 
     if (props.accounting) {
