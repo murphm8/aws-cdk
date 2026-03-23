@@ -1,5 +1,5 @@
 import { AccountingMode, SlurmRestMode } from './enums';
-import { CfnCluster, CfnComputeNodeGroup } from './pcs.generated';
+import { CfnCluster, CfnComputeNodeGroup, CfnQueue } from './pcs.generated';
 
 /**
  * Properties for configuring Slurm accounting
@@ -136,6 +136,17 @@ export interface ComputeNodeGroupSlurmConfigurationProps {
 }
 
 /**
+ * Properties for configuring Slurm settings on a queue
+ */
+export interface QueueSlurmConfigurationProps {
+  /**
+   * Additional custom Slurm settings for the queue
+   * @default - No custom settings
+   */
+  readonly customSettings?: SlurmCustomSetting[];
+}
+
+/**
  * Helper class for building Slurm configurations
  */
 export class SlurmConfiguration {
@@ -192,6 +203,22 @@ export class SlurmConfiguration {
    * Creates a Slurm configuration for a compute node group
    */
   public static forComputeNodeGroup(props: ComputeNodeGroupSlurmConfigurationProps): CfnComputeNodeGroup.SlurmConfigurationProperty {
+    const result: any = {};
+
+    if (props.customSettings && props.customSettings.length > 0) {
+      result.slurmCustomSettings = props.customSettings.map(setting => ({
+        parameterName: setting.parameterName,
+        parameterValue: setting.parameterValue,
+      }));
+    }
+
+    return result;
+  }
+
+  /**
+   * Creates a Slurm configuration for a queue
+   */
+  public static forQueue(props: QueueSlurmConfigurationProps): CfnQueue.SlurmConfigurationProperty {
     const result: any = {};
 
     if (props.customSettings && props.customSettings.length > 0) {
