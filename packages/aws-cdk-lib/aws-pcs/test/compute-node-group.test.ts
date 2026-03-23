@@ -314,4 +314,131 @@ describe('PCS ComputeNodeGroup', () => {
       });
     });
   });
+
+  describe('purchase options', () => {
+    test('creates compute node group with CAPACITY_BLOCK purchase option', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        purchaseOption: pcs.PurchaseOption.CAPACITY_BLOCK,
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        PurchaseOption: 'CAPACITY_BLOCK',
+      });
+    });
+
+    test('ON_DEMAND purchase option maps to ONDEMAND in CFN', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        purchaseOption: pcs.PurchaseOption.ON_DEMAND,
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        PurchaseOption: 'ONDEMAND',
+      });
+    });
+
+    test('applies default SpotOptions when SPOT purchase option without explicit spotOptions', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        purchaseOption: pcs.PurchaseOption.SPOT,
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        PurchaseOption: 'SPOT',
+        SpotOptions: {
+          AllocationStrategy: 'price-capacity-optimized',
+        },
+      });
+    });
+
+    test('does not apply SpotOptions for ON_DEMAND purchase option', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        purchaseOption: pcs.PurchaseOption.ON_DEMAND,
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        PurchaseOption: 'ONDEMAND',
+        SpotOptions: Match.absent(),
+      });
+    });
+
+    test('uses explicit SpotOptions when provided with SPOT', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        purchaseOption: pcs.PurchaseOption.SPOT,
+        spotOptions: {
+          allocationStrategy: pcs.SpotAllocationStrategy.LOWEST_PRICE,
+        },
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        PurchaseOption: 'SPOT',
+        SpotOptions: {
+          AllocationStrategy: 'lowest-price',
+        },
+      });
+    });
+  });
+
+  describe('slurm configuration', () => {
+    test('creates compute node group with Slurm custom settings', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        slurmConfiguration: {
+          customSettings: [
+            { parameterName: 'Weight', parameterValue: '10' },
+            { parameterName: 'Feature', parameterValue: 'gpu' },
+          ],
+        },
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        SlurmConfiguration: {
+          SlurmCustomSettings: [
+            { ParameterName: 'Weight', ParameterValue: '10' },
+            { ParameterName: 'Feature', ParameterValue: 'gpu' },
+          ],
+        },
+      });
+    });
+  });
+
+  describe('launch template', () => {
+    test('creates compute node group with explicit launch template version', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        launchTemplate: { launchTemplate, version: '3' },
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        CustomLaunchTemplate: {
+          Version: '3',
+        },
+      });
+    });
+
+    test('defaults to $Latest launch template version', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        CustomLaunchTemplate: {
+          Version: '$Latest',
+        },
+      });
+    });
+  });
+
+  describe('tags', () => {
+    test('addTags adds tags to compute node group', () => {
+      const cng = new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      expect(() => {
+        cng.addTags({ Environment: 'Production', Team: 'HPC' });
+      }).not.toThrow();
+    });
+  });
+
+  describe('attributes', () => {
+    test('exposes status and errorInfo', () => {
+      const cng = new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      expect(cng.status).toBeDefined();
+      expect(cng.errorInfo).toBeDefined();
+    });
+  });
 });

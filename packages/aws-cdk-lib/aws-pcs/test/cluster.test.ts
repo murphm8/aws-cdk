@@ -487,4 +487,228 @@ describe('PCS Cluster', () => {
       template.resourceCountIs('AWS::EC2::SecurityGroup', 1);
     });
   });
+
+  describe('network type', () => {
+    test('creates cluster with IPv4 network type', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        networkType: pcs.NetworkType.IPV4,
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Networking: Match.objectLike({
+          NetworkType: 'IPV4',
+        }),
+      });
+    });
+
+    test('creates cluster with IPv6 network type', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        networkType: pcs.NetworkType.IPV6,
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Networking: Match.objectLike({
+          NetworkType: 'IPV6',
+        }),
+      });
+    });
+
+    test('creates cluster without network type (default)', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Networking: {
+          SubnetIds: Match.anyValue(),
+          SecurityGroupIds: Match.anyValue(),
+          NetworkType: Match.absent(),
+        },
+      });
+    });
+  });
+
+  describe('optional security groups', () => {
+    test('creates cluster without security groups', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Networking: {
+          SubnetIds: Match.anyValue(),
+          SecurityGroupIds: Match.absent(),
+        },
+      });
+    });
+  });
+
+  describe('JWT auth and SlurmRest configuration', () => {
+    test('creates cluster with JWT auth configuration', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        slurmConfiguration: {
+          jwtAuth: {
+            secretArn: 'arn:aws:secretsmanager:us-west-2:123456789012:secret:jwt-key',
+            secretVersion: '2',
+          },
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        SlurmConfiguration: {
+          JwtAuth: {
+            JwtKey: {
+              SecretArn: 'arn:aws:secretsmanager:us-west-2:123456789012:secret:jwt-key',
+              SecretVersion: '2',
+            },
+          },
+        },
+      });
+    });
+
+    test('JWT auth uses default secretVersion of 1', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        slurmConfiguration: {
+          jwtAuth: {
+            secretArn: 'arn:aws:secretsmanager:us-west-2:123456789012:secret:jwt-key',
+          },
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        SlurmConfiguration: {
+          JwtAuth: {
+            JwtKey: {
+              SecretArn: 'arn:aws:secretsmanager:us-west-2:123456789012:secret:jwt-key',
+              SecretVersion: '1',
+            },
+          },
+        },
+      });
+    });
+
+    test('creates cluster with SlurmRest STANDARD mode', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        slurmConfiguration: {
+          slurmRest: {
+            mode: pcs.SlurmRestMode.STANDARD,
+          },
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        SlurmConfiguration: {
+          SlurmRest: {
+            Mode: 'STANDARD',
+          },
+        },
+      });
+    });
+
+    test('creates cluster with SlurmRest NONE mode', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        subnetIds: [vpc.privateSubnets[0].subnetId],
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        slurmConfiguration: {
+          slurmRest: {
+            mode: pcs.SlurmRestMode.NONE,
+          },
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        SlurmConfiguration: {
+          SlurmRest: {
+            Mode: 'NONE',
+          },
+        },
+      });
+    });
+  });
+
+  describe('cluster attributes import', () => {
+    test('fromClusterAttributes uses provided clusterId', () => {
+      const imported = pcs.Cluster.fromClusterAttributes(stack, 'Imported', {
+        clusterArn: 'arn:aws:pcs:us-west-2:123456789012:cluster/test-id',
+        clusterId: 'custom-id',
+        clusterName: 'my-cluster',
+      });
+      expect(imported.clusterId).toEqual('custom-id');
+    });
+
+    test('fromClusterAttributes derives clusterId from ARN when not provided', () => {
+      const imported = pcs.Cluster.fromClusterAttributes(stack, 'Imported', {
+        clusterArn: 'arn:aws:pcs:us-west-2:123456789012:cluster/test-id',
+        clusterName: 'my-cluster',
+      });
+      expect(imported.clusterId).toEqual('test-id');
+    });
+  });
+
+  describe('Endpoint and ErrorInfo interfaces', () => {
+    test('Endpoint and ErrorInfo are importable types', () => {
+      const endpoint: pcs.Endpoint = {
+        type: 'SLURMCTLD',
+        privateIpAddress: '10.0.0.1',
+        port: '6817',
+      };
+      const errorInfo: pcs.ErrorInfo = {
+        code: 'CLUSTER_ERROR',
+        message: 'test error',
+      };
+      expect(endpoint.type).toBeDefined();
+      expect(errorInfo.code).toBeDefined();
+    });
+  });
 });
