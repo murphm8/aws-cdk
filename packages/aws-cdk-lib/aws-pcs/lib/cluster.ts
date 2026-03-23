@@ -48,8 +48,9 @@ export interface ClusterProps {
 
   /**
    * Security groups for the cluster control plane
+   * @default - No security groups
    */
-  readonly securityGroups: ec2.ISecurityGroup[];
+  readonly securityGroups?: ec2.ISecurityGroup[];
 
   /**
    * The size of the cluster
@@ -113,6 +114,12 @@ export interface ClusterAttributes {
   readonly clusterArn: string;
 
   /**
+   * The ID of the cluster
+   * @default - derived from clusterArn
+   */
+  readonly clusterId?: string;
+
+  /**
    * The name of the cluster
    */
   readonly clusterName: string;
@@ -153,7 +160,7 @@ export class Cluster extends cdk.Resource implements ICluster {
   public static fromClusterAttributes(scope: constructs.Construct, id: string, attrs: ClusterAttributes): ICluster {
     class Import extends cdk.Resource implements ICluster {
       public readonly clusterArn = attrs.clusterArn;
-      public readonly clusterId = cdk.Arn.split(attrs.clusterArn, cdk.ArnFormat.SLASH_RESOURCE_NAME).resourceName!;
+      public readonly clusterId = attrs.clusterId ?? cdk.Arn.split(attrs.clusterArn, cdk.ArnFormat.SLASH_RESOURCE_NAME).resourceName!;
       public readonly clusterName = attrs.clusterName;
     }
 
