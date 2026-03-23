@@ -412,12 +412,12 @@ describe('PCS ComputeNodeGroup', () => {
       });
     });
 
-    test('defaults to $Latest launch template version', () => {
+    test('defaults to version 1 launch template version', () => {
       new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
 
       Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
         CustomLaunchTemplate: {
-          Version: '$Latest',
+          Version: '1',
         },
       });
     });
