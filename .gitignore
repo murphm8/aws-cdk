@@ -76,3 +76,7 @@ bun.lock
 !**/test/**/pnpm-lock.yaml
 !**/test/**/bun.lockb
 !**/test/**/bun.lock
+
+# Roko AI agent artifacts
+.roko/
+notes/
