@@ -4,16 +4,7 @@ import { IComputeNodeGroup } from './compute-node-group';
 import { CfnQueue } from './pcs.generated';
 import { QueueSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as cdk from '../../core';
-
-/**
- * Error thrown when an invalid queue ARN is provided
- */
-class InvalidQueueArnError extends Error {
-  constructor(arn: string) {
-    super(`Invalid queue ARN: ${arn}`);
-    this.name = 'InvalidQueueArnError';
-  }
-}
+import { UnscopedValidationError } from '../../core';
 
 /**
  * Configuration for associating a compute node group with a queue
@@ -154,13 +145,13 @@ export class Queue extends cdk.Resource implements IQueue {
     const resourceName = arnParts.resourceName;
 
     if (!resourceName) {
-      throw new InvalidQueueArnError(queueArn);
+      throw new UnscopedValidationError('InvalidQueueArn', `Invalid queue ARN: ${queueArn}`);
     }
 
     // PCS queue ARNs have the format: queue/cluster-id/queue-id
     const parts = resourceName.split('/');
     if (parts.length !== 2) {
-      throw new InvalidQueueArnError(queueArn);
+      throw new UnscopedValidationError('InvalidQueueArn', `Invalid queue ARN: ${queueArn}`);
     }
 
     const [clusterId, queueId] = parts;
