@@ -22,7 +22,7 @@ describe('PCS ComputeNodeGroup', () => {
       description: 'Test security group',
     });
     cluster = new pcs.Cluster(stack, 'TestCluster', {
-      subnetIds: [vpc.privateSubnets[0].subnetId],
+      vpc,
       securityGroups: [securityGroup],
       size: pcs.ClusterSize.SMALL,
       scheduler: {
@@ -42,7 +42,7 @@ describe('PCS ComputeNodeGroup', () => {
   function createDefaultProps(overrides?: Partial<pcs.ComputeNodeGroupProps>): pcs.ComputeNodeGroupProps {
     return {
       cluster,
-      subnetIds: [vpc.privateSubnets[0].subnetId],
+      vpc,
       launchTemplate: { launchTemplate },
       instanceProfile,
       instanceConfigurations: [
@@ -245,12 +245,31 @@ describe('PCS ComputeNodeGroup', () => {
       }).toThrow(/instanceConfigurations is required and must contain at least one configuration/);
     });
 
-    test('throws when subnetIds is empty', () => {
-      expect(() => {
-        new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
-          subnetIds: [],
-        }));
-      }).toThrow(/At least one subnet ID must be provided/);
+    test('default subnet selection uses PRIVATE_WITH_EGRESS', () => {
+      // WHEN - no vpcSubnets specified, just vpc
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      // THEN - should select private subnets
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        SubnetIds: Match.arrayWith([
+          { Ref: Match.stringLikeRegexp('TestVpcPrivateSubnet.*') },
+        ]),
+      });
+    });
+
+    test('creates compute node group with PUBLIC subnet selection', () => {
+      // WHEN
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      }));
+
+      // THEN
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        SubnetIds: [
+          { Ref: Match.stringLikeRegexp('TestVpcPublicSubnet1.*') },
+          { Ref: Match.stringLikeRegexp('TestVpcPublicSubnet2.*') },
+        ],
+      });
     });
   });
 

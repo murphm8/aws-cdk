@@ -41,10 +41,16 @@ export interface ClusterProps {
   readonly clusterName?: string;
 
   /**
-   * The subnet IDs where the cluster control plane will be deployed.
-   * AWS PCS currently supports only 1 subnet in this list.
+   * The VPC to place the cluster in
    */
-  readonly subnetIds: string[];
+  readonly vpc: ec2.IVpc;
+
+  /**
+   * Which subnets to place the cluster control plane in
+   *
+   * @default - Private subnets with egress
+   */
+  readonly vpcSubnets?: ec2.SubnetSelection;
 
   /**
    * Security groups for the cluster control plane
@@ -207,9 +213,12 @@ export class Cluster extends cdk.Resource implements ICluster {
   public readonly clusterName: string;
 
   private readonly cfnCluster: CfnCluster;
+  private readonly _vpc: ec2.IVpc;
 
   constructor(scope: constructs.Construct, id: string, props: ClusterProps) {
     super(scope, id);
+
+    this._vpc = props.vpc;
 
     // Set up scheduler configuration
     const scheduler = props.scheduler;
@@ -220,12 +229,15 @@ export class Cluster extends cdk.Resource implements ICluster {
       slurmConfiguration = SlurmConfiguration.forCluster(props.slurmConfiguration);
     }
 
+    // Resolve subnets from VPC
+    const subnetIds = props.vpc.selectSubnets(props.vpcSubnets ?? { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds;
+
     // Create the cluster
     this.cfnCluster = new CfnCluster(this, 'Resource', {
       name: props.clusterName,
       size: props.size,
       networking: {
-        subnetIds: props.subnetIds,
+        subnetIds,
         securityGroupIds: props.securityGroups?.map(sg => sg.securityGroupId),
         networkType: props.networkType,
       },

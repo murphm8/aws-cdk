@@ -105,11 +105,18 @@ export interface ComputeNodeGroupProps {
   readonly cluster: ICluster;
 
   /**
-   * The subnet IDs where compute instances will be launched
+   * The VPC to place compute instances in
+   */
+  readonly vpc: ec2.IVpc;
+
+  /**
+   * Which subnets to place compute instances in
    *
    * The subnets must be in the same VPC as the cluster.
+   *
+   * @default - Private subnets with egress
    */
-  readonly subnetIds: string[];
+  readonly vpcSubnets?: ec2.SubnetSelection;
 
   /**
    * The machine image to use for compute instances
@@ -382,10 +389,8 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       throw new ComputeNodeGroupValidationError('minInstanceCount cannot be greater than maxInstanceCount');
     }
 
-    // Validate subnet IDs are provided
-    if (!props.subnetIds || props.subnetIds.length === 0) {
-      throw new ComputeNodeGroupValidationError('At least one subnet ID must be provided');
-    }
+    // Resolve subnets from VPC
+    const subnetIds = props.vpc.selectSubnets(props.vpcSubnets ?? { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds;
 
     // Validate instance profile ARN format
     const profileArn = this.instanceProfile.instanceProfileArn;
@@ -398,7 +403,6 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       }
     }
 
-    const subnetIds = props.subnetIds;
     const instanceConfigs = props.instanceConfigurations;
     const scalingConfig = props.scalingConfiguration;
 
