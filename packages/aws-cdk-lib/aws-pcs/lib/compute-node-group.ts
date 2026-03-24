@@ -185,6 +185,13 @@ export interface ComputeNodeGroupProps {
   readonly slurmConfiguration?: ComputeNodeGroupSlurmConfigurationProps;
 
   /**
+   * Policy to apply when the compute node group is removed from the stack.
+   *
+   * @default RemovalPolicy.DESTROY
+   */
+  readonly removalPolicy?: cdk.RemovalPolicy;
+
+  /**
    * Tags to apply to the compute node group
    *
    * 1 or more tags added to the resource. Each tag consists of a tag key and tag value.
@@ -350,7 +357,9 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
   private readonly cfnComputeNodeGroup: CfnComputeNodeGroup;
 
   constructor(scope: constructs.Construct, id: string, props: ComputeNodeGroupProps) {
-    super(scope, id);
+    super(scope, id, {
+      physicalName: props.computeNodeGroupName,
+    });
 
     this.cluster = props.cluster;
 
@@ -419,7 +428,7 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     }
 
     this.cfnComputeNodeGroup = new CfnComputeNodeGroup(this, 'Resource', {
-      name: props.computeNodeGroupName,
+      name: this.physicalName,
       clusterId: this.cluster.clusterId,
       amiId: amiId,
       customLaunchTemplate: {
@@ -441,9 +450,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       tags: props.tags,
     });
 
+    this.cfnComputeNodeGroup.applyRemovalPolicy(props.removalPolicy ?? cdk.RemovalPolicy.DESTROY);
+
     this.computeNodeGroupArn = this.cfnComputeNodeGroup.attrArn;
     this.computeNodeGroupId = this.cfnComputeNodeGroup.attrId;
-    this.computeNodeGroupName = this.cfnComputeNodeGroup.name || this.cfnComputeNodeGroup.attrId;
+    this.computeNodeGroupName = props.computeNodeGroupName || this.cfnComputeNodeGroup.attrId;
   }
 
   /**

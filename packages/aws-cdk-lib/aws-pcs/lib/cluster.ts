@@ -81,6 +81,13 @@ export interface ClusterProps {
   readonly networkType?: NetworkType;
 
   /**
+   * Policy to apply when the cluster is removed from the stack.
+   *
+   * @default RemovalPolicy.RETAIN
+   */
+  readonly removalPolicy?: cdk.RemovalPolicy;
+
+  /**
    * Tags to apply to the cluster
    * @default - No tags
    */
@@ -90,7 +97,7 @@ export interface ClusterProps {
 /**
  * Represents a PCS Cluster
  */
-export interface ICluster extends cdk.IResource {
+export interface ICluster extends cdk.IResource, ec2.IConnectable {
   /**
    * The ARN of the cluster
    * @attribute
@@ -159,7 +166,7 @@ export interface ErrorInfo {
 /**
  * A PCS Cluster for high-performance computing workloads
  */
-export class Cluster extends cdk.Resource implements ICluster {
+export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable {
   /**
    * Import an existing cluster by specifying its attributes
    */
@@ -168,6 +175,7 @@ export class Cluster extends cdk.Resource implements ICluster {
       public readonly clusterArn = attrs.clusterArn;
       public readonly clusterId = attrs.clusterId ?? cdk.Arn.split(attrs.clusterArn, cdk.ArnFormat.SLASH_RESOURCE_NAME).resourceName!;
       public readonly clusterName = attrs.clusterName;
+      public readonly connections = new ec2.Connections();
     }
 
     return new Import(scope, id);
@@ -188,6 +196,7 @@ export class Cluster extends cdk.Resource implements ICluster {
       public readonly clusterArn = clusterArn;
       public readonly clusterId = clusterId!;
       public readonly clusterName = clusterId!; // Best guess since we only have the ARN
+      public readonly connections = new ec2.Connections();
     }
 
     return new Import(scope, id);
@@ -212,13 +221,24 @@ export class Cluster extends cdk.Resource implements ICluster {
   public readonly clusterId: string;
   public readonly clusterName: string;
 
+  /**
+   * The network connections associated with this cluster.
+   */
+  public readonly connections: ec2.Connections;
+
   private readonly cfnCluster: CfnCluster;
   private readonly _vpc: ec2.IVpc;
 
   constructor(scope: constructs.Construct, id: string, props: ClusterProps) {
-    super(scope, id);
+    super(scope, id, {
+      physicalName: props.clusterName,
+    });
 
     this._vpc = props.vpc;
+
+    this.connections = new ec2.Connections({
+      securityGroups: props.securityGroups,
+    });
 
     // Set up scheduler configuration
     const scheduler = props.scheduler;
@@ -234,11 +254,11 @@ export class Cluster extends cdk.Resource implements ICluster {
 
     // Create the cluster
     this.cfnCluster = new CfnCluster(this, 'Resource', {
-      name: props.clusterName,
+      name: this.physicalName,
       size: props.size,
       networking: {
         subnetIds,
-        securityGroupIds: props.securityGroups?.map(sg => sg.securityGroupId),
+        securityGroupIds: cdk.Lazy.list({ produce: () => this.connections.securityGroups.map(sg => sg.securityGroupId) }, { omitEmpty: true }),
         networkType: props.networkType,
       },
       scheduler: {
@@ -249,9 +269,11 @@ export class Cluster extends cdk.Resource implements ICluster {
       tags: props.tags,
     });
 
+    this.cfnCluster.applyRemovalPolicy(props.removalPolicy ?? cdk.RemovalPolicy.RETAIN);
+
     this.clusterArn = this.cfnCluster.attrArn;
     this.clusterId = this.cfnCluster.attrId;
-    this.clusterName = this.cfnCluster.name || this.cfnCluster.attrId;
+    this.clusterName = props.clusterName || this.cfnCluster.attrId;
   }
 
   /**

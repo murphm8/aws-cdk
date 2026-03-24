@@ -55,6 +55,13 @@ export interface QueueProps {
   readonly slurmConfiguration?: QueueSlurmConfigurationProps;
 
   /**
+   * Policy to apply when the queue is removed from the stack.
+   *
+   * @default RemovalPolicy.DESTROY
+   */
+  readonly removalPolicy?: cdk.RemovalPolicy;
+
+  /**
    * Tags to apply to the queue
    *
    * @default - No tags
@@ -217,7 +224,9 @@ export class Queue extends cdk.Resource implements IQueue {
   private readonly computeNodeGroupConfigs: ComputeNodeGroupConfiguration[];
 
   constructor(scope: constructs.Construct, id: string, props: QueueProps) {
-    super(scope, id);
+    super(scope, id, {
+      physicalName: props.queueName,
+    });
 
     this.cluster = props.cluster;
     this.computeNodeGroupConfigs = props.computeNodeGroupConfigurations || [];
@@ -235,16 +244,18 @@ export class Queue extends cdk.Resource implements IQueue {
 
     // Create the queue
     this.cfnQueue = new CfnQueue(this, 'Resource', {
-      name: props.queueName,
+      name: this.physicalName,
       clusterId: this.cluster.clusterId,
       computeNodeGroupConfigurations: computeNodeGroupConfigurations.length > 0 ? computeNodeGroupConfigurations : undefined,
       slurmConfiguration,
       tags: props.tags,
     });
 
+    this.cfnQueue.applyRemovalPolicy(props.removalPolicy ?? cdk.RemovalPolicy.DESTROY);
+
     this.queueArn = this.cfnQueue.attrArn;
     this.queueId = this.cfnQueue.attrId;
-    this.queueName = this.cfnQueue.name || this.cfnQueue.attrId;
+    this.queueName = props.queueName || this.cfnQueue.attrId;
   }
 
   /**

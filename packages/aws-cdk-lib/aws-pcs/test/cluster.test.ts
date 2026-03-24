@@ -765,4 +765,169 @@ describe('PCS Cluster', () => {
       });
     });
   });
+
+  describe('physicalName support', () => {
+    test('passes physical name to CFN when specified', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        clusterName: 'MyPhysicalCluster',
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Name: 'MyPhysicalCluster',
+      });
+    });
+
+    test('physical name is undefined when not specified', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Name: Match.absent(),
+      });
+    });
+  });
+
+  describe('removalPolicy support', () => {
+    test('defaults to RETAIN removal policy', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      Template.fromStack(stack).hasResource('AWS::PCS::Cluster', {
+        DeletionPolicy: 'Retain',
+        UpdateReplacePolicy: 'Retain',
+      });
+    });
+
+    test('applies custom removal policy', () => {
+      new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
+      Template.fromStack(stack).hasResource('AWS::PCS::Cluster', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
+      });
+    });
+  });
+
+  describe('IConnectable support', () => {
+    test('cluster.connections is available', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      expect(cluster.connections).toBeDefined();
+    });
+
+    test('security groups passed in props are accessible via connections', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      expect(cluster.connections.securityGroups).toHaveLength(1);
+      expect(cluster.connections.securityGroups[0]).toBe(securityGroup);
+    });
+
+    test('connections.allowFrom adds ingress rule', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      const peerSg = new ec2.SecurityGroup(stack, 'PeerSG', {
+        vpc,
+        description: 'Peer security group',
+      });
+
+      cluster.connections.allowFrom(peerSg, ec2.Port.tcp(6817), 'Allow Slurm traffic');
+
+      Template.fromStack(stack).hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        IpProtocol: 'tcp',
+        FromPort: 6817,
+        ToPort: 6817,
+        Description: 'Allow Slurm traffic',
+      });
+    });
+
+    test('cluster without security groups has empty connections', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      expect(cluster.connections.securityGroups).toHaveLength(0);
+    });
+
+    test('security groups added via connections appear in CFN template', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      const newSg = new ec2.SecurityGroup(stack, 'NewSG', {
+        vpc,
+        description: 'Added via connections',
+      });
+      cluster.connections.addSecurityGroup(newSg);
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Cluster', {
+        Networking: {
+          SecurityGroupIds: [{ 'Fn::GetAtt': [Match.stringLikeRegexp('NewSG.*'), 'GroupId'] }],
+        },
+      });
+    });
+  });
 });
