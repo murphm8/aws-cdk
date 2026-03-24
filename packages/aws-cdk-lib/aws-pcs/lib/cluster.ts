@@ -249,7 +249,6 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
   public readonly connections: ec2.Connections;
 
   private readonly cfnCluster: CfnCluster;
-  private readonly _vpc: ec2.IVpc;
 
   constructor(scope: constructs.Construct, id: string, props: ClusterProps) {
     super(scope, id, {
@@ -258,8 +257,6 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
 
     // Enhanced CDK Analytics Telemetry
     addConstructMetadata(this, props);
-
-    this._vpc = props.vpc;
 
     this.connections = new ec2.Connections({
       securityGroups: props.securityGroups,
