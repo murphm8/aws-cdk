@@ -4,7 +4,7 @@ import { IComputeNodeGroup } from './compute-node-group';
 import { CfnQueue } from './pcs.generated';
 import { QueueSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as cdk from '../../core';
-import { UnscopedValidationError } from '../../core';
+import { UnscopedValidationError, ValidationError } from '../../core';
 import { addConstructMetadata } from '../../core/lib/metadata-resource';
 import { propertyInjectable } from '../../core/lib/prop-injectable';
 
@@ -264,6 +264,19 @@ export class Queue extends cdk.Resource implements IQueue {
    * Add a compute node group to this queue
    */
   public addComputeNodeGroup(computeNodeGroup: IComputeNodeGroup): void {
+    const queueClusterArn = this.cluster.clusterArn;
+    const cngClusterArn = computeNodeGroup.cluster.clusterArn;
+
+    if (!cdk.Token.isUnresolved(queueClusterArn) && !cdk.Token.isUnresolved(cngClusterArn)) {
+      if (queueClusterArn !== cngClusterArn) {
+        throw new ValidationError(
+          'ClusterMismatch',
+          `ComputeNodeGroup's cluster (${cngClusterArn}) does not match the Queue's cluster (${queueClusterArn}). They must belong to the same cluster.`,
+          this,
+        );
+      }
+    }
+
     this.computeNodeGroupConfigs.push({
       computeNodeGroup,
     });
