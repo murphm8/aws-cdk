@@ -197,6 +197,62 @@ describe('PCS Queue', () => {
         ComputeNodeGroupConfigurations: Match.absent(),
       });
     });
+
+    test('addComputeNodeGroup succeeds when CNG belongs to same cluster', () => {
+      const cng = createCng('TestCNG');
+
+      const queue = new pcs.Queue(stack, 'TestQueue', {
+        cluster,
+      });
+
+      expect(() => queue.addComputeNodeGroup(cng)).not.toThrow();
+      expect(queue.computeNodeGroups).toContain(cng);
+    });
+
+    test('addComputeNodeGroup throws when CNG belongs to a different cluster', () => {
+      const clusterA = pcs.Cluster.fromClusterArn(stack, 'ClusterA', 'arn:aws:pcs:us-west-2:123456789012:cluster/cls-aaaaa');
+      const clusterB = pcs.Cluster.fromClusterArn(stack, 'ClusterB', 'arn:aws:pcs:us-west-2:123456789012:cluster/cls-bbbbb');
+
+      const cngOnClusterB = pcs.ComputeNodeGroup.fromComputeNodeGroupAttributes(stack, 'CngB', {
+        computeNodeGroupArn: 'arn:aws:pcs:us-west-2:123456789012:computenodegroup/cls-bbbbb/cng-12345',
+        computeNodeGroupId: 'cng-12345',
+        computeNodeGroupName: 'cng-b',
+        cluster: clusterB,
+      });
+
+      const queue = new pcs.Queue(stack, 'TestQueue', {
+        cluster: clusterA,
+      });
+
+      expect(() => queue.addComputeNodeGroup(cngOnClusterB)).toThrow(/does not match the Queue's cluster/);
+    });
+
+    test('addComputeNodeGroup skips validation when cluster ARN is a token', () => {
+      const tokenCluster = pcs.Cluster.fromClusterAttributes(stack, 'TokenCluster', {
+        clusterArn: cdk.Lazy.string({ produce: () => 'arn:aws:pcs:us-west-2:123456789012:cluster/cls-token' }),
+        clusterName: 'token-cluster',
+      });
+
+      const cngOnTokenCluster = new pcs.ComputeNodeGroup(stack, 'TokenCNG', {
+        cluster: tokenCluster,
+        vpc,
+        launchTemplate: { launchTemplate },
+        instanceProfile,
+        instanceConfigurations: [
+          { instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE) },
+        ],
+        scalingConfiguration: {
+          minInstanceCount: 0,
+          maxInstanceCount: 10,
+        },
+      });
+
+      const queue = new pcs.Queue(stack, 'TestQueue', {
+        cluster,
+      });
+
+      expect(() => queue.addComputeNodeGroup(cngOnTokenCluster)).not.toThrow();
+    });
   });
 
   describe('slurm configuration', () => {
