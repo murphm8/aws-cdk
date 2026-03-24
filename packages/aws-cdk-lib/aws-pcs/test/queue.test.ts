@@ -22,7 +22,7 @@ describe('PCS Queue', () => {
       description: 'Test security group',
     });
     cluster = new pcs.Cluster(stack, 'TestCluster', {
-      subnetIds: [vpc.privateSubnets[0].subnetId],
+      vpc,
       securityGroups: [securityGroup],
       size: pcs.ClusterSize.SMALL,
       scheduler: {
@@ -138,7 +138,7 @@ describe('PCS Queue', () => {
     function createCng(id: string): pcs.ComputeNodeGroup {
       return new pcs.ComputeNodeGroup(stack, id, {
         cluster,
-        subnetIds: [vpc.privateSubnets[0].subnetId],
+        vpc,
         launchTemplate: { launchTemplate },
         instanceProfile,
         instanceConfigurations: [
