@@ -30,13 +30,14 @@ clusterSg.addIngressRule(clusterSg, ec2.Port.allTraffic(), 'Allow cluster-intern
 // PCS Cluster
 const cluster = new pcs.Cluster(stack, 'Cluster', {
   clusterName: 'integ-test-cluster',
-  subnetIds: [vpc.privateSubnets[0].subnetId],
+  vpc,
   securityGroups: [clusterSg],
   size: pcs.ClusterSize.SMALL,
   scheduler: {
     type: pcs.SchedulerType.SLURM,
     version: '24.11',
   },
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
 });
 
 // IAM Role with proper PCS path
@@ -64,7 +65,7 @@ const launchTemplate = new ec2.LaunchTemplate(stack, 'LaunchTemplate', {
 const computeNodeGroup = new pcs.ComputeNodeGroup(stack, 'ComputeNodeGroup', {
   computeNodeGroupName: 'integ-test-cng',
   cluster,
-  subnetIds: [vpc.privateSubnets[0].subnetId],
+  vpc,
   launchTemplate: { launchTemplate },
   instanceProfile,
   instanceConfigurations: [
@@ -75,6 +76,7 @@ const computeNodeGroup = new pcs.ComputeNodeGroup(stack, 'ComputeNodeGroup', {
     maxInstanceCount: 4,
   },
   purchaseOption: pcs.PurchaseOption.ON_DEMAND,
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
 });
 
 // Queue
@@ -84,6 +86,7 @@ const queue = new pcs.Queue(stack, 'Queue', {
   computeNodeGroupConfigurations: [
     { computeNodeGroup },
   ],
+  removalPolicy: cdk.RemovalPolicy.DESTROY,
 });
 
 // Outputs
