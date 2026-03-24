@@ -6,6 +6,8 @@ import * as ec2 from '../../aws-ec2';
 import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
 import { UnscopedValidationError } from '../../core';
+import { addConstructMetadata } from '../../core/lib/metadata-resource';
+import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
  * Scheduler configuration for a cluster
@@ -168,7 +170,13 @@ export interface ErrorInfo {
 /**
  * A PCS Cluster for high-performance computing workloads
  */
+@propertyInjectable
 export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable {
+  /**
+   * Uniquely identifies this class.
+   */
+  public static readonly PROPERTY_INJECTION_ID: string = 'aws-cdk-lib.aws-pcs.Cluster';
+
   /**
    * Import an existing cluster by specifying its attributes
    */
@@ -247,6 +255,9 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
     super(scope, id, {
       physicalName: props.clusterName,
     });
+
+    // Enhanced CDK Analytics Telemetry
+    addConstructMetadata(this, props);
 
     this._vpc = props.vpc;
 
