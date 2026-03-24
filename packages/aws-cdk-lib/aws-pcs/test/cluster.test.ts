@@ -1,5 +1,6 @@
 import { Template, Match } from '../../assertions';
 import * as ec2 from '../../aws-ec2';
+import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
 import * as pcs from '../lib';
 
@@ -928,6 +929,64 @@ describe('PCS Cluster', () => {
           SecurityGroupIds: [{ 'Fn::GetAtt': [Match.stringLikeRegexp('NewSG.*'), 'GroupId'] }],
         },
       });
+    });
+  });
+
+  describe('grant methods', () => {
+    test('grantFullAccess grants pcs:* on cluster ARN', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      const role = new iam.Role(stack, 'GrantRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      });
+
+      cluster.grantFullAccess(role);
+
+      Template.fromStack(stack).hasResourceProperties('AWS::IAM::Policy', Match.objectLike({
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([Match.objectLike({
+            Action: 'pcs:*',
+            Effect: 'Allow',
+            Resource: { 'Fn::GetAtt': [Match.stringLikeRegexp('TestCluster.*'), 'Arn'] },
+          })]),
+        }),
+      }));
+    });
+
+    test('grantReadOnly grants pcs:Get* and pcs:List* on cluster ARN', () => {
+      const cluster = new pcs.Cluster(stack, 'TestCluster', {
+        vpc,
+        securityGroups: [securityGroup],
+        size: pcs.ClusterSize.SMALL,
+        scheduler: {
+          type: pcs.SchedulerType.SLURM,
+          version: '23.11.7',
+        },
+      });
+
+      const role = new iam.Role(stack, 'GrantRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      });
+
+      cluster.grantReadOnly(role);
+
+      Template.fromStack(stack).hasResourceProperties('AWS::IAM::Policy', Match.objectLike({
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([Match.objectLike({
+            Action: ['pcs:Get*', 'pcs:List*'],
+            Effect: 'Allow',
+            Resource: { 'Fn::GetAtt': [Match.stringLikeRegexp('TestCluster.*'), 'Arn'] },
+          })]),
+        }),
+      }));
     });
   });
 });

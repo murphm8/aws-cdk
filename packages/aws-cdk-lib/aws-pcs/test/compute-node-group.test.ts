@@ -175,27 +175,27 @@ describe('PCS ComputeNodeGroup', () => {
     });
 
     test('throws when minInstanceCount is negative', () => {
-      expect(() => {
-        new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
-          scalingConfiguration: { minInstanceCount: -1, maxInstanceCount: 10 },
-        }));
-      }).toThrow(/minInstanceCount must be >= 0/);
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        scalingConfiguration: { minInstanceCount: -1, maxInstanceCount: 10 },
+      }));
+
+      expect(() => Template.fromStack(stack)).toThrow(/minInstanceCount must be >= 0/);
     });
 
     test('throws when maxInstanceCount is negative', () => {
-      expect(() => {
-        new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
-          scalingConfiguration: { minInstanceCount: 0, maxInstanceCount: -1 },
-        }));
-      }).toThrow(/maxInstanceCount must be >= 0/);
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        scalingConfiguration: { minInstanceCount: 0, maxInstanceCount: -1 },
+      }));
+
+      expect(() => Template.fromStack(stack)).toThrow(/maxInstanceCount must be >= 0/);
     });
 
     test('throws when minInstanceCount is greater than maxInstanceCount', () => {
-      expect(() => {
-        new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
-          scalingConfiguration: { minInstanceCount: 11, maxInstanceCount: 10 },
-        }));
-      }).toThrow(/minInstanceCount cannot be greater than maxInstanceCount/);
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        scalingConfiguration: { minInstanceCount: 11, maxInstanceCount: 10 },
+      }));
+
+      expect(() => Template.fromStack(stack)).toThrow(/minInstanceCount cannot be greater than maxInstanceCount/);
     });
 
     test('skips validation when minInstanceCount is a token', () => {
@@ -238,11 +238,11 @@ describe('PCS ComputeNodeGroup', () => {
 
   describe('other validations', () => {
     test('throws when instanceConfigurations is empty', () => {
-      expect(() => {
-        new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
-          instanceConfigurations: [],
-        }));
-      }).toThrow(/instanceConfigurations is required and must contain at least one configuration/);
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        instanceConfigurations: [],
+      }));
+
+      expect(() => Template.fromStack(stack)).toThrow(/instanceConfigurations is required and must contain at least one configuration/);
     });
 
     test('default subnet selection uses PRIVATE_WITH_EGRESS', () => {
@@ -500,6 +500,28 @@ describe('PCS ComputeNodeGroup', () => {
         DeletionPolicy: 'Retain',
         UpdateReplacePolicy: 'Retain',
       });
+    });
+  });
+
+  describe('grant methods', () => {
+    test('grantRegisterInstance grants correct action on compute node group ARN', () => {
+      const cng = new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      const role = new iam.Role(stack, 'GrantRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      });
+
+      cng.grantRegisterInstance(role);
+
+      Template.fromStack(stack).hasResourceProperties('AWS::IAM::Policy', Match.objectLike({
+        PolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([Match.objectLike({
+            Action: 'pcs:RegisterComputeNodeGroupInstance',
+            Effect: 'Allow',
+            Resource: { 'Fn::GetAtt': [Match.stringLikeRegexp('TestCNG.*'), 'Arn'] },
+          })]),
+        }),
+      }));
     });
   });
 });
