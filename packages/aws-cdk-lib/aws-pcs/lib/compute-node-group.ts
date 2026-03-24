@@ -6,7 +6,7 @@ import { ComputeNodeGroupSlurmConfigurationProps, SlurmConfiguration } from './s
 import * as ec2 from '../../aws-ec2';
 import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
-import { UnscopedValidationError, ValidationError } from '../../core';
+import { UnscopedValidationError } from '../../core';
 
 /**
  * Scaling configuration for a compute node group
@@ -209,6 +209,11 @@ export interface IComputeNodeGroup extends cdk.IResource {
    * The cluster this compute node group belongs to
    */
   readonly cluster: ICluster;
+
+  /**
+   * Grant permission to register a compute node instance with this group.
+   */
+  grantRegisterInstance(grantee: iam.IGrantable): iam.Grant;
 }
 
 /**
@@ -249,6 +254,9 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       public readonly computeNodeGroupId = attrs.computeNodeGroupId;
       public readonly computeNodeGroupName = attrs.computeNodeGroupName;
       public readonly cluster = attrs.cluster;
+      public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:RegisterComputeNodeGroupInstance'], resourceArns: [this.computeNodeGroupArn] });
+      }
     }
 
     return new Import(scope, id);
@@ -297,6 +305,9 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       public readonly computeNodeGroupId = computeNodeGroupId;
       public readonly computeNodeGroupName = computeNodeGroupId;
       public readonly cluster = importedCluster;
+      public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:RegisterComputeNodeGroupInstance'], resourceArns: [this.computeNodeGroupArn] });
+      }
     }
 
     return new Import(scope, id);
@@ -324,6 +335,9 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       public readonly computeNodeGroupId = computeNodeGroupId;
       public readonly computeNodeGroupName = computeNodeGroupId;
       public readonly cluster = cluster;
+      public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:RegisterComputeNodeGroupInstance'], resourceArns: [this.computeNodeGroupArn] });
+      }
     }
 
     return new Import(scope, id);
@@ -347,52 +361,14 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     // Use the provided instance profile (now required)
     this.instanceProfile = props.instanceProfile;
 
-    // Validate required parameters
-    if (!props.instanceConfigurations || props.instanceConfigurations.length === 0) {
-      throw new ValidationError('EmptyInstanceConfigurations', 'instanceConfigurations is required and must contain at least one configuration', this);
-    }
-
-    if (!props.scalingConfiguration) {
-      throw new ValidationError('MissingScalingConfiguration', 'scalingConfiguration is required', this);
-    }
-
     // Get AMI ID from machine image if provided
     let amiId: string | undefined;
     if (props.machineImage) {
       amiId = props.machineImage.getImage(this).imageId;
     }
 
-    // Validate scaling configuration bounds (skip validation for unresolved tokens)
-    if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
-      && props.scalingConfiguration.minInstanceCount < 0) {
-      throw new ValidationError('InvalidMinInstanceCount', 'minInstanceCount must be >= 0', this);
-    }
-
-    if (!cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
-      && props.scalingConfiguration.maxInstanceCount < 0) {
-      throw new ValidationError('InvalidMaxInstanceCount', 'maxInstanceCount must be >= 0', this);
-    }
-
-    if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
-      && !cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
-      && props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
-      throw new ValidationError('MinGreaterThanMax', 'minInstanceCount cannot be greater than maxInstanceCount', this);
-    }
-
     // Resolve subnets from VPC
     const subnetIds = props.vpc.selectSubnets(props.vpcSubnets ?? { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds;
-
-    // Validate instance profile ARN format
-    const profileArn = this.instanceProfile.instanceProfileArn;
-    if (!cdk.Token.isUnresolved(profileArn)) {
-      if (!profileArn.startsWith('arn:')) {
-        throw new ValidationError('InvalidInstanceProfileArn',
-          `instanceProfile must have a valid ARN format, got: ${profileArn}. ` +
-          'The role must start with "AWSPCS" or have path "/aws-pcs/".',
-          this,
-        );
-      }
-    }
 
     const instanceConfigs = props.instanceConfigurations;
     const scalingConfig = props.scalingConfiguration;
@@ -437,6 +413,53 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     this.computeNodeGroupArn = this.cfnComputeNodeGroup.attrArn;
     this.computeNodeGroupId = this.cfnComputeNodeGroup.attrId;
     this.computeNodeGroupName = props.computeNodeGroupName || this.cfnComputeNodeGroup.attrId;
+
+    this.node.addValidation({
+      validate: () => {
+        const errors: string[] = [];
+
+        if (!props.instanceConfigurations || props.instanceConfigurations.length === 0) {
+          errors.push('instanceConfigurations is required and must contain at least one configuration');
+        }
+
+        if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
+          && props.scalingConfiguration.minInstanceCount < 0) {
+          errors.push('minInstanceCount must be >= 0');
+        }
+
+        if (!cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
+          && props.scalingConfiguration.maxInstanceCount < 0) {
+          errors.push('maxInstanceCount must be >= 0');
+        }
+
+        if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
+          && !cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
+          && props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
+          errors.push('minInstanceCount cannot be greater than maxInstanceCount');
+        }
+
+        const profileArn = this.instanceProfile.instanceProfileArn;
+        if (!cdk.Token.isUnresolved(profileArn) && !profileArn.startsWith('arn:')) {
+          errors.push(
+            `instanceProfile must have a valid ARN format, got: ${profileArn}. ` +
+            'The role must start with "AWSPCS" or have path "/aws-pcs/".',
+          );
+        }
+
+        return errors;
+      },
+    });
+  }
+
+  /**
+   * Grant permission to register a compute node instance with this group.
+   */
+  public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
+    return iam.Grant.addToPrincipal({
+      grantee,
+      actions: ['pcs:RegisterComputeNodeGroupInstance'],
+      resourceArns: [this.computeNodeGroupArn],
+    });
   }
 
   /**

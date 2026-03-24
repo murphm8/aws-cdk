@@ -3,6 +3,7 @@ import { SchedulerType, ClusterSize, NetworkType } from './enums';
 import { CfnCluster } from './pcs.generated';
 import { ClusterSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as ec2 from '../../aws-ec2';
+import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
 import { UnscopedValidationError } from '../../core';
 
@@ -106,6 +107,16 @@ export interface ICluster extends cdk.IResource, ec2.IConnectable {
    * @attribute
    */
   readonly clusterName: string;
+
+  /**
+   * Grant full access to this cluster (pcs:*).
+   */
+  grantFullAccess(grantee: iam.IGrantable): iam.Grant;
+
+  /**
+   * Grant read-only access to this cluster (pcs:Get*, pcs:List*).
+   */
+  grantReadOnly(grantee: iam.IGrantable): iam.Grant;
 }
 
 /**
@@ -167,6 +178,12 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
       public readonly clusterId = attrs.clusterId ?? cdk.Arn.split(attrs.clusterArn, cdk.ArnFormat.SLASH_RESOURCE_NAME).resourceName!;
       public readonly clusterName = attrs.clusterName;
       public readonly connections = new ec2.Connections();
+      public grantFullAccess(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:*'], resourceArns: [this.clusterArn] });
+      }
+      public grantReadOnly(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:Get*', 'pcs:List*'], resourceArns: [this.clusterArn] });
+      }
     }
 
     return new Import(scope, id);
@@ -188,6 +205,12 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
       public readonly clusterId = clusterId!;
       public readonly clusterName = clusterId!; // Best guess since we only have the ARN
       public readonly connections = new ec2.Connections();
+      public grantFullAccess(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:*'], resourceArns: [this.clusterArn] });
+      }
+      public grantReadOnly(grantee: iam.IGrantable): iam.Grant {
+        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:Get*', 'pcs:List*'], resourceArns: [this.clusterArn] });
+      }
     }
 
     return new Import(scope, id);
@@ -265,6 +288,28 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
     this.clusterArn = this.cfnCluster.attrArn;
     this.clusterId = this.cfnCluster.attrId;
     this.clusterName = props.clusterName || this.cfnCluster.attrId;
+  }
+
+  /**
+   * Grant full access to this cluster (pcs:*).
+   */
+  public grantFullAccess(grantee: iam.IGrantable): iam.Grant {
+    return iam.Grant.addToPrincipal({
+      grantee,
+      actions: ['pcs:*'],
+      resourceArns: [this.clusterArn],
+    });
+  }
+
+  /**
+   * Grant read-only access to this cluster (pcs:Get*, pcs:List*).
+   */
+  public grantReadOnly(grantee: iam.IGrantable): iam.Grant {
+    return iam.Grant.addToPrincipal({
+      grantee,
+      actions: ['pcs:Get*', 'pcs:List*'],
+      resourceArns: [this.clusterArn],
+    });
   }
 
   /**
