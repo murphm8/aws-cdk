@@ -4,16 +4,7 @@ import { CfnCluster } from './pcs.generated';
 import { ClusterSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as ec2 from '../../aws-ec2';
 import * as cdk from '../../core';
-
-/**
- * Error thrown when an invalid cluster ARN is provided
- */
-class InvalidClusterArnError extends Error {
-  constructor(arn: string) {
-    super(`Invalid cluster ARN: ${arn}`);
-    this.name = 'InvalidClusterArnError';
-  }
-}
+import { UnscopedValidationError } from '../../core';
 
 /**
  * Scheduler configuration for a cluster
@@ -189,7 +180,7 @@ export class Cluster extends cdk.Resource implements ICluster, ec2.IConnectable 
     const clusterId = arnParts.resourceName;
 
     if (!clusterId) {
-      throw new InvalidClusterArnError(clusterArn);
+      throw new UnscopedValidationError('InvalidClusterArn', `Invalid cluster ARN: ${clusterArn}`);
     }
 
     class Import extends cdk.Resource implements ICluster {

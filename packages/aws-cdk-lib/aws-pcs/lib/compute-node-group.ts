@@ -6,26 +6,7 @@ import { ComputeNodeGroupSlurmConfigurationProps, SlurmConfiguration } from './s
 import * as ec2 from '../../aws-ec2';
 import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
-
-/**
- * Error thrown when an invalid compute node group ARN is provided
- */
-class InvalidComputeNodeGroupArnError extends Error {
-  constructor(arn: string) {
-    super(`Invalid compute node group ARN: ${arn}`);
-    this.name = 'InvalidComputeNodeGroupArnError';
-  }
-}
-
-/**
- * Error thrown when compute node group validation fails
- */
-class ComputeNodeGroupValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ComputeNodeGroupValidationError';
-  }
-}
+import { UnscopedValidationError, ValidationError } from '../../core';
 
 /**
  * Scaling configuration for a compute node group
@@ -287,13 +268,13 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     const resourceName = arnParts.resourceName;
 
     if (!resourceName) {
-      throw new InvalidComputeNodeGroupArnError(computeNodeGroupArn);
+      throw new UnscopedValidationError('InvalidComputeNodeGroupArn', `Invalid compute node group ARN: ${computeNodeGroupArn}`);
     }
 
     // PCS compute node group ARNs have the format: computenodegroup/cluster-id/cng-id
     const parts = resourceName.split('/');
     if (parts.length !== 2) {
-      throw new InvalidComputeNodeGroupArnError(computeNodeGroupArn);
+      throw new UnscopedValidationError('InvalidComputeNodeGroupArn', `Invalid compute node group ARN: ${computeNodeGroupArn}`);
     }
 
     const [clusterId, computeNodeGroupId] = parts;
@@ -368,11 +349,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
 
     // Validate required parameters
     if (!props.instanceConfigurations || props.instanceConfigurations.length === 0) {
-      throw new ComputeNodeGroupValidationError('instanceConfigurations is required and must contain at least one configuration');
+      throw new ValidationError('EmptyInstanceConfigurations', 'instanceConfigurations is required and must contain at least one configuration', this);
     }
 
     if (!props.scalingConfiguration) {
-      throw new ComputeNodeGroupValidationError('scalingConfiguration is required');
+      throw new ValidationError('MissingScalingConfiguration', 'scalingConfiguration is required', this);
     }
 
     // Get AMI ID from machine image if provided
@@ -384,18 +365,18 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     // Validate scaling configuration bounds (skip validation for unresolved tokens)
     if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
       && props.scalingConfiguration.minInstanceCount < 0) {
-      throw new ComputeNodeGroupValidationError('minInstanceCount must be >= 0');
+      throw new ValidationError('InvalidMinInstanceCount', 'minInstanceCount must be >= 0', this);
     }
 
     if (!cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
       && props.scalingConfiguration.maxInstanceCount < 0) {
-      throw new ComputeNodeGroupValidationError('maxInstanceCount must be >= 0');
+      throw new ValidationError('InvalidMaxInstanceCount', 'maxInstanceCount must be >= 0', this);
     }
 
     if (!cdk.Token.isUnresolved(props.scalingConfiguration.minInstanceCount)
       && !cdk.Token.isUnresolved(props.scalingConfiguration.maxInstanceCount)
       && props.scalingConfiguration.minInstanceCount > props.scalingConfiguration.maxInstanceCount) {
-      throw new ComputeNodeGroupValidationError('minInstanceCount cannot be greater than maxInstanceCount');
+      throw new ValidationError('MinGreaterThanMax', 'minInstanceCount cannot be greater than maxInstanceCount', this);
     }
 
     // Resolve subnets from VPC
@@ -405,9 +386,10 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     const profileArn = this.instanceProfile.instanceProfileArn;
     if (!cdk.Token.isUnresolved(profileArn)) {
       if (!profileArn.startsWith('arn:')) {
-        throw new ComputeNodeGroupValidationError(
+        throw new ValidationError('InvalidInstanceProfileArn',
           `instanceProfile must have a valid ARN format, got: ${profileArn}. ` +
           'The role must start with "AWSPCS" or have path "/aws-pcs/".',
+          this,
         );
       }
     }
