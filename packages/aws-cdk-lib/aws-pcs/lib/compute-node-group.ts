@@ -1,5 +1,7 @@
 import * as constructs from 'constructs';
-import { Cluster, ICluster } from './cluster';
+import { ICluster } from './cluster-base';
+import { Cluster } from './cluster';
+import { ComputeNodeGroupBase, IComputeNodeGroup } from './compute-node-group-base';
 import { PurchaseOption, SpotAllocationStrategy } from './enums';
 import { CfnComputeNodeGroup } from './pcs.generated';
 import { ComputeNodeGroupSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
@@ -186,39 +188,6 @@ export interface ComputeNodeGroupProps {
 }
 
 /**
- * Represents a PCS ComputeNodeGroup
- */
-export interface IComputeNodeGroup extends cdk.IResource {
-  /**
-   * The ARN of the compute node group
-   * @attribute
-   */
-  readonly computeNodeGroupArn: string;
-
-  /**
-   * The ID of the compute node group
-   * @attribute
-   */
-  readonly computeNodeGroupId: string;
-
-  /**
-   * The name of the compute node group
-   * @attribute
-   */
-  readonly computeNodeGroupName: string;
-
-  /**
-   * The cluster this compute node group belongs to
-   */
-  readonly cluster: ICluster;
-
-  /**
-   * Grant permission to register a compute node instance with this group.
-   */
-  grantRegisterInstance(grantee: iam.IGrantable): iam.Grant;
-}
-
-/**
  * Properties for importing an existing compute node group
  */
 export interface ComputeNodeGroupAttributes {
@@ -247,7 +216,7 @@ export interface ComputeNodeGroupAttributes {
  * A PCS ComputeNodeGroup for managing compute resources in an HPC cluster
  */
 @propertyInjectable
-export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup {
+export class ComputeNodeGroup extends ComputeNodeGroupBase {
   /**
    * Uniquely identifies this class.
    */
@@ -257,14 +226,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
    * Import an existing compute node group by specifying its attributes
    */
   public static fromComputeNodeGroupAttributes(scope: constructs.Construct, id: string, attrs: ComputeNodeGroupAttributes): IComputeNodeGroup {
-    class Import extends cdk.Resource implements IComputeNodeGroup {
+    class Import extends ComputeNodeGroupBase {
       public readonly computeNodeGroupArn = attrs.computeNodeGroupArn;
       public readonly computeNodeGroupId = attrs.computeNodeGroupId;
       public readonly computeNodeGroupName = attrs.computeNodeGroupName;
       public readonly cluster = attrs.cluster;
-      public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
-        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:RegisterComputeNodeGroupInstance'], resourceArns: [this.computeNodeGroupArn] });
-      }
     }
 
     return new Import(scope, id);
@@ -308,14 +274,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
 
     const importedCluster = Cluster.fromClusterArn(scope, `${id}Cluster`, clusterArn);
 
-    class Import extends cdk.Resource implements IComputeNodeGroup {
+    class Import extends ComputeNodeGroupBase {
       public readonly computeNodeGroupArn = computeNodeGroupArn;
       public readonly computeNodeGroupId = computeNodeGroupId;
       public readonly computeNodeGroupName = computeNodeGroupId;
       public readonly cluster = importedCluster;
-      public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
-        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:RegisterComputeNodeGroupInstance'], resourceArns: [this.computeNodeGroupArn] });
-      }
     }
 
     return new Import(scope, id);
@@ -338,14 +301,11 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
       arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
     }, stack);
 
-    class Import extends cdk.Resource implements IComputeNodeGroup {
+    class Import extends ComputeNodeGroupBase {
       public readonly computeNodeGroupArn = computeNodeGroupArn;
       public readonly computeNodeGroupId = computeNodeGroupId;
       public readonly computeNodeGroupName = computeNodeGroupId;
       public readonly cluster = cluster;
-      public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
-        return iam.Grant.addToPrincipal({ grantee, actions: ['pcs:RegisterComputeNodeGroupInstance'], resourceArns: [this.computeNodeGroupArn] });
-      }
     }
 
     return new Import(scope, id);
@@ -459,17 +419,6 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
 
         return errors;
       },
-    });
-  }
-
-  /**
-   * Grant permission to register a compute node instance with this group.
-   */
-  public grantRegisterInstance(grantee: iam.IGrantable): iam.Grant {
-    return iam.Grant.addToPrincipal({
-      grantee,
-      actions: ['pcs:RegisterComputeNodeGroupInstance'],
-      resourceArns: [this.computeNodeGroupArn],
     });
   }
 
