@@ -7,6 +7,8 @@ import * as ec2 from '../../aws-ec2';
 import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
 import { UnscopedValidationError } from '../../core';
+import { addConstructMetadata } from '../../core/lib/metadata-resource';
+import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
  * Scaling configuration for a compute node group
@@ -244,7 +246,13 @@ export interface ComputeNodeGroupAttributes {
 /**
  * A PCS ComputeNodeGroup for managing compute resources in an HPC cluster
  */
+@propertyInjectable
 export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup {
+  /**
+   * Uniquely identifies this class.
+   */
+  public static readonly PROPERTY_INJECTION_ID: string = 'aws-cdk-lib.aws-pcs.ComputeNodeGroup';
+
   /**
    * Import an existing compute node group by specifying its attributes
    */
@@ -355,6 +363,9 @@ export class ComputeNodeGroup extends cdk.Resource implements IComputeNodeGroup 
     super(scope, id, {
       physicalName: props.computeNodeGroupName,
     });
+
+    // Enhanced CDK Analytics Telemetry
+    addConstructMetadata(this, props);
 
     this.cluster = props.cluster;
 

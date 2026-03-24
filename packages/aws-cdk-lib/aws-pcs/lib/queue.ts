@@ -5,6 +5,8 @@ import { CfnQueue } from './pcs.generated';
 import { QueueSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
 import * as cdk from '../../core';
 import { UnscopedValidationError } from '../../core';
+import { addConstructMetadata } from '../../core/lib/metadata-resource';
+import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
  * Configuration for associating a compute node group with a queue
@@ -116,7 +118,13 @@ export interface QueueAttributes {
 /**
  * A PCS Queue for managing job scheduling in an HPC cluster
  */
+@propertyInjectable
 export class Queue extends cdk.Resource implements IQueue {
+  /**
+   * Uniquely identifies this class.
+   */
+  public static readonly PROPERTY_INJECTION_ID: string = 'aws-cdk-lib.aws-pcs.Queue';
+
   /**
    * Import an existing queue by specifying its attributes
    */
@@ -218,6 +226,9 @@ export class Queue extends cdk.Resource implements IQueue {
     super(scope, id, {
       physicalName: props.queueName,
     });
+
+    // Enhanced CDK Analytics Telemetry
+    addConstructMetadata(this, props);
 
     this.cluster = props.cluster;
     this.computeNodeGroupConfigs = props.computeNodeGroupConfigurations || [];
