@@ -1,8 +1,10 @@
 import * as constructs from 'constructs';
-import { Cluster, ICluster } from './cluster';
-import { IComputeNodeGroup } from './compute-node-group';
-import { CfnQueue } from './pcs.generated';
+import { ICluster } from './cluster-base';
+import { Cluster } from './cluster';
+import { IComputeNodeGroup } from './compute-node-group-base';
+import { QueueBase, IQueue } from './queue-base';
 import { QueueSlurmConfigurationProps, SlurmConfiguration } from './slurm-configuration';
+import { CfnQueue } from './pcs.generated';
 import * as cdk from '../../core';
 import { UnscopedValidationError, ValidationError } from '../../core';
 import { addConstructMetadata } from '../../core/lib/metadata-resource';
@@ -63,34 +65,6 @@ export interface QueueProps {
 }
 
 /**
- * Represents a PCS Queue
- */
-export interface IQueue extends cdk.IResource {
-  /**
-   * The ARN of the queue
-   * @attribute
-   */
-  readonly queueArn: string;
-
-  /**
-   * The ID of the queue
-   * @attribute
-   */
-  readonly queueId: string;
-
-  /**
-   * The name of the queue
-   * @attribute
-   */
-  readonly queueName: string;
-
-  /**
-   * The cluster this queue belongs to
-   */
-  readonly cluster: ICluster;
-}
-
-/**
  * Properties for importing an existing queue
  */
 export interface QueueAttributes {
@@ -119,7 +93,7 @@ export interface QueueAttributes {
  * A PCS Queue for managing job scheduling in an HPC cluster
  */
 @propertyInjectable
-export class Queue extends cdk.Resource implements IQueue {
+export class Queue extends QueueBase {
   /**
    * Uniquely identifies this class.
    */
@@ -129,7 +103,7 @@ export class Queue extends cdk.Resource implements IQueue {
    * Import an existing queue by specifying its attributes
    */
   public static fromQueueAttributes(scope: constructs.Construct, id: string, attrs: QueueAttributes): IQueue {
-    class Import extends cdk.Resource implements IQueue {
+    class Import extends QueueBase {
       public readonly queueArn = attrs.queueArn;
       public readonly queueId = attrs.queueId;
       public readonly queueName = attrs.queueName;
@@ -177,7 +151,7 @@ export class Queue extends cdk.Resource implements IQueue {
 
     const importedCluster = Cluster.fromClusterArn(scope, `${id}Cluster`, clusterArn);
 
-    class Import extends cdk.Resource implements IQueue {
+    class Import extends QueueBase {
       public readonly queueArn = queueArn;
       public readonly queueId = queueId;
       public readonly queueName = queueId;
@@ -204,7 +178,7 @@ export class Queue extends cdk.Resource implements IQueue {
       arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
     }, stack);
 
-    class Import extends cdk.Resource implements IQueue {
+    class Import extends QueueBase {
       public readonly queueArn = queueArn;
       public readonly queueId = queueId;
       public readonly queueName = queueId;
