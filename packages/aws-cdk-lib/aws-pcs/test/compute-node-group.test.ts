@@ -460,4 +460,46 @@ describe('PCS ComputeNodeGroup', () => {
       expect(cng.errorInfo).toBeDefined();
     });
   });
+
+  describe('physicalName support', () => {
+    test('passes physical name to CFN when specified', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        computeNodeGroupName: 'MyPhysicalCNG',
+      }));
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        Name: 'MyPhysicalCNG',
+      });
+    });
+
+    test('physical name is undefined when not specified', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::ComputeNodeGroup', {
+        Name: Match.absent(),
+      });
+    });
+  });
+
+  describe('removalPolicy support', () => {
+    test('defaults to DESTROY removal policy', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps());
+
+      Template.fromStack(stack).hasResource('AWS::PCS::ComputeNodeGroup', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
+      });
+    });
+
+    test('applies custom removal policy', () => {
+      new pcs.ComputeNodeGroup(stack, 'TestCNG', createDefaultProps({
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+      }));
+
+      Template.fromStack(stack).hasResource('AWS::PCS::ComputeNodeGroup', {
+        DeletionPolicy: 'Retain',
+        UpdateReplacePolicy: 'Retain',
+      });
+    });
+  });
 });

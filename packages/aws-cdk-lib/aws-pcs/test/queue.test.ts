@@ -274,4 +274,52 @@ describe('PCS Queue', () => {
       );
     });
   });
+
+  describe('physicalName support', () => {
+    test('passes physical name to CFN when specified', () => {
+      new pcs.Queue(stack, 'TestQueue', {
+        cluster,
+        queueName: 'MyPhysicalQueue',
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Queue', {
+        Name: 'MyPhysicalQueue',
+      });
+    });
+
+    test('physical name is undefined when not specified', () => {
+      new pcs.Queue(stack, 'TestQueue', {
+        cluster,
+      });
+
+      Template.fromStack(stack).hasResourceProperties('AWS::PCS::Queue', {
+        Name: Match.absent(),
+      });
+    });
+  });
+
+  describe('removalPolicy support', () => {
+    test('defaults to DESTROY removal policy', () => {
+      new pcs.Queue(stack, 'TestQueue', {
+        cluster,
+      });
+
+      Template.fromStack(stack).hasResource('AWS::PCS::Queue', {
+        DeletionPolicy: 'Delete',
+        UpdateReplacePolicy: 'Delete',
+      });
+    });
+
+    test('applies custom removal policy', () => {
+      new pcs.Queue(stack, 'TestQueue', {
+        cluster,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+      });
+
+      Template.fromStack(stack).hasResource('AWS::PCS::Queue', {
+        DeletionPolicy: 'Retain',
+        UpdateReplacePolicy: 'Retain',
+      });
+    });
+  });
 });
