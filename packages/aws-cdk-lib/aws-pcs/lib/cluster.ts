@@ -7,6 +7,7 @@ import * as ec2 from '../../aws-ec2';
 import * as cdk from '../../core';
 import { UnscopedValidationError } from '../../core';
 import { addConstructMetadata } from '../../core/lib/metadata-resource';
+import { lit } from '../../core/lib/private/literal-string';
 import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
@@ -166,7 +167,7 @@ export class Cluster extends ClusterBase {
     const clusterId = arnParts.resourceName;
 
     if (!clusterId) {
-      throw new UnscopedValidationError('InvalidClusterArn', `Invalid cluster ARN: ${clusterArn}`);
+      throw new UnscopedValidationError(lit`InvalidClusterArn`, `Invalid cluster ARN: ${clusterArn}`);
     }
 
     class Import extends ClusterBase {

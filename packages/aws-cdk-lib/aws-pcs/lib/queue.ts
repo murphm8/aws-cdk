@@ -8,6 +8,7 @@ import { CfnQueue } from './pcs.generated';
 import * as cdk from '../../core';
 import { UnscopedValidationError, ValidationError } from '../../core';
 import { addConstructMetadata } from '../../core/lib/metadata-resource';
+import { lit } from '../../core/lib/private/literal-string';
 import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
@@ -127,13 +128,13 @@ export class Queue extends QueueBase {
     const resourceName = arnParts.resourceName;
 
     if (!resourceName) {
-      throw new UnscopedValidationError('InvalidQueueArn', `Invalid queue ARN: ${queueArn}`);
+      throw new UnscopedValidationError(lit`InvalidQueueArn`, `Invalid queue ARN: ${queueArn}`);
     }
 
     // PCS queue ARNs have the format: queue/cluster-id/queue-id
     const parts = resourceName.split('/');
     if (parts.length !== 2) {
-      throw new UnscopedValidationError('InvalidQueueArn', `Invalid queue ARN: ${queueArn}`);
+      throw new UnscopedValidationError(lit`InvalidQueueArn`, `Invalid queue ARN: ${queueArn}`);
     }
 
     const [clusterId, queueId] = parts;
@@ -244,7 +245,7 @@ export class Queue extends QueueBase {
     if (!cdk.Token.isUnresolved(queueClusterArn) && !cdk.Token.isUnresolved(cngClusterArn)) {
       if (queueClusterArn !== cngClusterArn) {
         throw new ValidationError(
-          'ClusterMismatch',
+          lit`ClusterMismatch`,
           `ComputeNodeGroup's cluster (${cngClusterArn}) does not match the Queue's cluster (${queueClusterArn}). They must belong to the same cluster.`,
           this,
         );

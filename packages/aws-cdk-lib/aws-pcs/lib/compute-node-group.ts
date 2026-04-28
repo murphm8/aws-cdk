@@ -10,6 +10,7 @@ import * as iam from '../../aws-iam';
 import * as cdk from '../../core';
 import { UnscopedValidationError } from '../../core';
 import { addConstructMetadata } from '../../core/lib/metadata-resource';
+import { lit } from '../../core/lib/private/literal-string';
 import { propertyInjectable } from '../../core/lib/prop-injectable';
 
 /**
@@ -250,13 +251,13 @@ export class ComputeNodeGroup extends ComputeNodeGroupBase {
     const resourceName = arnParts.resourceName;
 
     if (!resourceName) {
-      throw new UnscopedValidationError('InvalidComputeNodeGroupArn', `Invalid compute node group ARN: ${computeNodeGroupArn}`);
+      throw new UnscopedValidationError(lit`InvalidComputeNodeGroupArn`, `Invalid compute node group ARN: ${computeNodeGroupArn}`);
     }
 
     // PCS compute node group ARNs have the format: computenodegroup/cluster-id/cng-id
     const parts = resourceName.split('/');
     if (parts.length !== 2) {
-      throw new UnscopedValidationError('InvalidComputeNodeGroupArn', `Invalid compute node group ARN: ${computeNodeGroupArn}`);
+      throw new UnscopedValidationError(lit`InvalidComputeNodeGroupArn`, `Invalid compute node group ARN: ${computeNodeGroupArn}`);
     }
 
     const [clusterId, computeNodeGroupId] = parts;
