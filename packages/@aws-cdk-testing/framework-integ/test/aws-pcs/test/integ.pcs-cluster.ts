@@ -11,9 +11,9 @@ const stack = new cdk.Stack(app, 'aws-cdk-pcs-integ', {
   },
 });
 
-// VPC with private subnets for PCS
+// VPC with a single private subnet for PCS (PCS requires exactly 1 subnet per cluster)
 const vpc = new ec2.Vpc(stack, 'Vpc', {
-  maxAzs: 2,
+  maxAzs: 1,
   natGateways: 1,
 });
 
@@ -54,11 +54,16 @@ const instanceProfile = new iam.InstanceProfile(stack, 'NodeProfile', {
   role: nodeRole,
 });
 
-// Launch Template - must include security group for PCS
+// PCS requires launch template userdata in MIME multipart format
+const userData = new ec2.MultipartUserData();
+userData.addUserDataPart(ec2.UserData.forLinux(), ec2.MultipartBody.SHELL_SCRIPT);
+
+// Launch Template - must include security group and MIME multipart userdata for PCS
 const launchTemplate = new ec2.LaunchTemplate(stack, 'LaunchTemplate', {
   machineImage: ec2.MachineImage.latestAmazonLinux2023(),
   instanceType: ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE),
   securityGroup: clusterSg,
+  userData,
 });
 
 // Compute Node Group
