@@ -33,7 +33,7 @@ AWS Parallel Computing Service (PCS) provides managed high-performance computing
 
 ### Creating a Cluster
 
-A cluster requires subnet IDs, security groups, a size, and a scheduler configuration:
+A cluster requires a VPC, a size, and a scheduler configuration:
 
 ```ts
 declare const vpc: ec2.IVpc;
@@ -41,19 +41,19 @@ declare const securityGroup: ec2.ISecurityGroup;
 
 const cluster = new pcs.Cluster(this, 'HpcCluster', {
   clusterName: 'my-hpc-cluster',
-  subnetIds: [vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds[0]],
+  vpc,
   securityGroups: [securityGroup],
   size: pcs.ClusterSize.SMALL,
   scheduler: {
     type: pcs.SchedulerType.SLURM,
-    version: '23.11',
+    version: '24.11',
   },
 });
 ```
 
 ### Creating a ComputeNodeGroup
 
-A compute node group requires a cluster, subnets, a launch template, an IAM instance profile,
+A compute node group requires a cluster, a VPC, a launch template, an IAM instance profile,
 instance configurations, and a scaling configuration:
 
 ```ts
@@ -67,7 +67,7 @@ const launchTemplate = new ec2.LaunchTemplate(this, 'ComputeLT', {
 
 const computeNodeGroup = new pcs.ComputeNodeGroup(this, 'ComputeNodes', {
   cluster,
-  subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+  vpc,
   launchTemplate: {
     launchTemplate,
   },
@@ -120,7 +120,7 @@ declare const instanceProfile: iam.IInstanceProfile;
 
 const spotComputeGroup = new pcs.ComputeNodeGroup(this, 'SpotCompute', {
   cluster,
-  subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+  vpc,
   launchTemplate: { launchTemplate },
   instanceProfile,
   instanceConfigurations: [
@@ -147,12 +147,12 @@ declare const vpc: ec2.IVpc;
 declare const securityGroup: ec2.ISecurityGroup;
 
 const cluster = new pcs.Cluster(this, 'AdvancedCluster', {
-  subnetIds: [vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds[0]],
+  vpc,
   securityGroups: [securityGroup],
   size: pcs.ClusterSize.LARGE,
   scheduler: {
     type: pcs.SchedulerType.SLURM,
-    version: '23.11',
+    version: '24.11',
   },
   slurmConfiguration: {
     accounting: pcs.SlurmConfiguration.standardAccounting(30),
@@ -172,7 +172,7 @@ declare const instanceProfile: iam.IInstanceProfile;
 
 const cng = new pcs.ComputeNodeGroup(this, 'ComputeNodes', {
   cluster,
-  subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+  vpc,
   launchTemplate: { launchTemplate },
   instanceProfile,
   instanceConfigurations: [
