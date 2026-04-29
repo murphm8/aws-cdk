@@ -30,7 +30,7 @@ export interface ICluster extends cdk.IResource, ec2.IConnectable {
   grantFullAccess(grantee: iam.IGrantable): iam.Grant;
 
   /**
-   * Grant read-only access to this cluster (pcs:Get*, pcs:List*).
+   * Grant read-only access to this cluster.
    */
   grantReadOnly(grantee: iam.IGrantable): iam.Grant;
 }
@@ -73,12 +73,20 @@ export abstract class ClusterBase extends cdk.Resource implements ICluster {
   }
 
   /**
-   * Grant read-only access to this cluster (pcs:Get*, pcs:List*).
+   * Grant read-only access to this cluster.
    */
   public grantReadOnly(grantee: iam.IGrantable): iam.Grant {
     return iam.Grant.addToPrincipal({
       grantee,
-      actions: ['pcs:Get*', 'pcs:List*'],
+      actions: [
+        'pcs:GetCluster',
+        'pcs:GetComputeNodeGroup',
+        'pcs:GetQueue',
+        'pcs:ListClusters',
+        'pcs:ListComputeNodeGroups',
+        'pcs:ListQueues',
+        'pcs:ListTagsForResource',
+      ],
       resourceArns: [this.clusterArn],
     });
   }

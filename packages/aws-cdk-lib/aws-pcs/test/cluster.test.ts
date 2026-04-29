@@ -961,7 +961,7 @@ describe('PCS Cluster', () => {
       }));
     });
 
-    test('grantReadOnly grants pcs:Get* and pcs:List* on cluster ARN', () => {
+    test('grantReadOnly grants specific read actions on cluster ARN', () => {
       const cluster = new pcs.Cluster(stack, 'TestCluster', {
         vpc,
         securityGroups: [securityGroup],
@@ -981,7 +981,15 @@ describe('PCS Cluster', () => {
       Template.fromStack(stack).hasResourceProperties('AWS::IAM::Policy', Match.objectLike({
         PolicyDocument: Match.objectLike({
           Statement: Match.arrayWith([Match.objectLike({
-            Action: ['pcs:Get*', 'pcs:List*'],
+            Action: [
+              'pcs:GetCluster',
+              'pcs:GetComputeNodeGroup',
+              'pcs:GetQueue',
+              'pcs:ListClusters',
+              'pcs:ListComputeNodeGroups',
+              'pcs:ListQueues',
+              'pcs:ListTagsForResource',
+            ],
             Effect: 'Allow',
             Resource: { 'Fn::GetAtt': [Match.stringLikeRegexp('TestCluster.*'), 'Arn'] },
           })]),
