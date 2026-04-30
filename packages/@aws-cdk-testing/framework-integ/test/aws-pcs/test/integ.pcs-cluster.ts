@@ -11,6 +11,8 @@ const stack = new cdk.Stack(app, 'aws-cdk-pcs-integ', {
   },
 });
 
+cdk.Tags.of(stack).add('test', 'aws-pcs-integ');
+
 // VPC with a single private subnet for PCS (PCS requires exactly 1 subnet per cluster)
 const vpc = new ec2.Vpc(stack, 'Vpc', {
   maxAzs: 1,
