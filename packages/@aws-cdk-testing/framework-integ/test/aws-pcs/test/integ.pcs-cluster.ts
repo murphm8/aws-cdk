@@ -39,7 +39,7 @@ const cluster = new pcs.Cluster(stack, 'Cluster', {
     type: pcs.SchedulerType.SLURM,
     version: '24.11',
   },
-  tags: { Environment: 'test', Service: 'pcs-integ' },
+  tags: { 'pcs:cluster-purpose': 'molecular-dynamics', 'pcs:scheduler': 'slurm' },
   removalPolicy: cdk.RemovalPolicy.DESTROY,
 });
 
@@ -84,7 +84,7 @@ const computeNodeGroup = new pcs.ComputeNodeGroup(stack, 'ComputeNodeGroup', {
     maxInstanceCount: 4,
   },
   purchaseOption: pcs.PurchaseOption.ON_DEMAND,
-  tags: { Component: 'compute' },
+  tags: { 'pcs:node-type': 'gpu-compute', 'pcs:workload': 'simulation' },
   removalPolicy: cdk.RemovalPolicy.DESTROY,
 });
 
@@ -95,7 +95,7 @@ const queue = new pcs.Queue(stack, 'Queue', {
   computeNodeGroupConfigurations: [
     { computeNodeGroup },
   ],
-  tags: { Component: 'queue' },
+  tags: { 'pcs:queue-priority': 'high', 'pcs:department': 'research' },
   removalPolicy: cdk.RemovalPolicy.DESTROY,
 });
 
